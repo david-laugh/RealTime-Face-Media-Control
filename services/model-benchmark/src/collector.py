@@ -111,7 +111,7 @@ def main():
     p.add_argument("--results-dir", type=Path, default=common.RESULTS_DIR)
     # meta.json
     p.add_argument("--operator", default="", help="측정자 이니셜/별칭 (실명 금지)")
-    p.add_argument("--deploy", default="int8", help="배포 옵션, 예: int8, int8+EON")
+    p.add_argument("--deploy", default="int8+EON", help="배포 옵션, 예: int8+EON, int8")
     p.add_argument("--esp-nn", default="off", choices=["on", "off"])
     p.add_argument("--color", default="grayscale", choices=["grayscale", "rgb"])
     p.add_argument("--device-threshold", type=float, default=0.2,

@@ -7,7 +7,8 @@
 
 | 항목 | 값 |
 |------|----|
-| 모델 | FOMO int8, 96x96 grayscale, ESP-NN off, 보드 패키지 esp32 3.3.12 |
+| 모델 | FOMO int8 + EON Compiler, 96x96 grayscale, ESP-NN off, 보드 패키지 esp32 3.3.12 |
+| 배포 기록 | 4개 세션은 실제로 int8+EON 빌드였으나 meta.json에는 `deploy: int8`로 기록됨 (당시 collector 기본값). meta는 수정하지 않음 |
 | 임계값 | 기기 출력 0.2 / bridge 판정 0.6 |
 | 카메라 | 모니터 상단 중앙, 높이 "40" (단위 미기록) |
 | 조명 | NORMAL (상세 `lighting` 미기록) |
