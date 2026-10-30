@@ -1,7 +1,10 @@
 # RealTime-Face-Media-Control
 
-> ⚠️ **Skeleton Repository — 실제 기능 코드는 아직 구현되지 않았습니다.**
-> 현재는 Repository 구조, Docker Container 골격, 통신 Contract(JSON Schema), 설계 문서 템플릿만 포함합니다.
+> **현재 버전: A/B Mock Demo**
+> - ✅ A: Firmware — Mock Detection(10초 true/false 교차) → MQTT (컴파일 검증, 실기기 미검증)
+> - ✅ B: MQTT Broker(Mosquitto) + Control Gateway(FastAPI, WebSocket) — Docker 실행/통합 테스트 완료
+> - ⏳ C: Web UI, D: Model Benchmark — 각 담당자 개발 중 (skeleton)
+> - 이번 Demo는 **얼굴 존재 여부만** 판단합니다 (정면/측면 구분 없음, 실제 모델/카메라 미사용).
 
 ## Project Overview
 
@@ -35,7 +38,8 @@ smart-youtube-face-control/
 ├── .env.example
 ├── docker-compose.yml
 ├── firmware/xiao-esp32s3-sense/   # Arduino firmware (not a container)
-│   ├── include/  src/  models/  config/
+│   ├── smart_media/               # Arduino sketch (Mock detection, MQTT publisher)
+│   └── include/  src/  models/  config/
 ├── services/
 │   ├── mqtt-broker/               # Eclipse Mosquitto
 │   ├── control-gateway/           # MQTT → State Machine → WebSocket
@@ -45,15 +49,15 @@ smart-youtube-face-control/
 │   ├── mqtt/                      # detection / status / telemetry schema
 │   └── websocket/                 # media-control schema
 ├── docs/                          # architecture, communication, benchmark, test plan, roles
-└── scripts/
+└── scripts/                       # mock_publisher.py, integration_test.py
 ```
 
 ## Docker Services
 
 | Service | Base Image | Port | Profile | 상태 |
 |---------|-----------|------|---------|------|
-| `mqtt-broker` | `eclipse-mosquitto:2.0.18` | 1883 (9001 reserved) | default | 설정 파일만 존재 |
-| `control-gateway` | `python:3.12-slim` (placeholder) | 8000 | default | placeholder (sleep) |
+| `mqtt-broker` | `eclipse-mosquitto:2` | 1883 (9001 reserved) | default | **구현 (demo)** |
+| `control-gateway` | `python:3.12-slim` + FastAPI | 8000 | default | **구현 (demo)** |
 | `web-ui` | `nginx:1.27-alpine` | 8080 → 80 | default | 빈 static 서빙 |
 | `model-benchmark` | `python:3.12-slim` (placeholder) | – | `benchmark` | placeholder (sleep) |
 
@@ -62,11 +66,11 @@ smart-youtube-face-control/
 
 ## Communication Flow
 
-1. XIAO ESP32S3 Sense → Camera Capture → Edge Impulse FOMO Face Detection
-2. Front Face / Face Absent 상태 판단
+1. XIAO ESP32S3 Sense → (현재) Mock Detection / (향후) Camera + Edge Impulse
+2. `raw_face_detected` true/false
 3. MQTT publish → `smart-media/{device_id}/detection`
 4. Mosquitto Broker → Control Gateway (subscribe)
-5. Control Gateway → WebSocket `media_control` (`PLAY` / `PAUSE`)
+5. Control Gateway 상태 판단 (true → PLAY, false/timeout/offline → PAUSE) → WebSocket `ws://<host>:8000/ws/media`
 6. Web UI → YouTube IFrame API → PLAY / PAUSE
 
 | Channel | Topic / Endpoint | Schema |
@@ -89,13 +93,40 @@ smart-youtube-face-control/
 
 자세한 내용: [`docs/roles.md`](docs/roles.md)
 
-## How to start Docker skeleton
+## Demo 실행 (A/B)
+
+```bash
+# 1. Broker + Gateway 실행
+docker compose up -d --build mqtt-broker control-gateway
+docker compose ps
+curl http://localhost:8000/health
+curl http://localhost:8000/api/state
+
+# 2-a. 실제 보드: firmware/xiao-esp32s3-sense/README.md 대로 config.h 작성 후 업로드
+#      (MQTT_HOST = 이 PC의 LAN IP)
+# 2-b. 보드 없이: PC mock device
+pip install paho-mqtt==2.1.0
+python scripts/mock_publisher.py --host localhost --device-id xiao-01
+
+# 3. WebSocket 확인: ws://localhost:8000/ws/media 에 연결하면 PLAY/PAUSE 메시지 수신
+
+# 4. 테스트
+pip install -r services/control-gateway/requirements-dev.txt
+(cd services/control-gateway && pytest -q)
+python scripts/integration_test.py --broker-restart
+```
+
+- 구현 상세: [`docs/implementation.md`](docs/implementation.md)
+- 테스트 결과: [`docs/demo-test.md`](docs/demo-test.md)
+- 모델 연동 계획: [`docs/model-integration-guide.md`](docs/model-integration-guide.md)
+
+## How to start all Docker services
 
 ```bash
 # 1. 환경 변수 파일 생성 (선택)
 cp .env.example .env
 
-# 2. Runtime skeleton 실행 (mqtt-broker, control-gateway, web-ui)
+# 2. Runtime 실행 (mqtt-broker, control-gateway, web-ui)
 docker compose up -d --build
 
 # 3. Benchmark 포함 실행 (optional)
@@ -106,12 +137,13 @@ docker compose ps
 docker compose down
 ```
 
-> control-gateway / model-benchmark는 애플리케이션 코드 없이 `sleep`으로 유지되는 placeholder Container입니다.
+> web-ui / model-benchmark는 아직 skeleton입니다 (model-benchmark는 `sleep` placeholder).
 
 ## Future Implementation
 
-- [ ] Firmware: Camera capture, Edge Impulse inference, MQTT publisher (Member A)
-- [ ] Control Gateway: MQTT subscriber, State Machine, WebSocket server (Member B) — Python FastAPI 또는 Node.js
+- [x] Firmware: Mock detection + MQTT publisher (Member A) — 실기기 검증 필요
+- [ ] Firmware: Camera capture, Edge Impulse inference (Member A, 모델 선정 후)
+- [x] Control Gateway: MQTT subscriber, State Machine, WebSocket server (Member B) — Python FastAPI
 - [ ] Web UI: YouTube IFrame API 연동, PLAY/PAUSE 제어, Face Status UI (Member C)
 - [ ] Model Benchmark: 모델 비교 및 성능 측정 (Member D)
 - [ ] Integration Test 및 MQTT 인증/보안 설정

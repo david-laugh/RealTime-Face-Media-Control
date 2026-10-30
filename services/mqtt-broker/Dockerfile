@@ -1,5 +1,5 @@
-# Mosquitto MQTT Broker (skeleton)
-FROM eclipse-mosquitto:2.0.18
+# Mosquitto MQTT Broker
+FROM eclipse-mosquitto:2
 
 COPY config/mosquitto.conf /mosquitto/config/mosquitto.conf
 

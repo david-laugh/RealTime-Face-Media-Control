@@ -1,0 +1,159 @@
+# Demo Test Report (A/B Mock Demo)
+
+실행일: 2026-10-30 (KST 11:06–11:10)
+
+> 원칙: 실제로 실행한 항목만 PASS/FAIL로 기록합니다. 실행하지 않은 항목은 `NOT_RUN`입니다.
+
+## 1. 테스트 환경
+
+| 항목 | 값 |
+|------|----|
+| OS | Windows 11 Home 10.0.26200 |
+| Docker | Docker Desktop, Engine 29.1.2 |
+| Mosquitto | `eclipse-mosquitto:2` → 실제 2.1.2 |
+| Gateway | Python 3.12-slim, fastapi 0.115.6, uvicorn 0.32.1, paho-mqtt 2.1.0 |
+| Host 테스트 도구 | Python 3.12.10, pytest 8.3.4, websockets 14.1, jsonschema 4.23.0 |
+| Arduino | arduino-cli 1.5.1 (Arduino IDE 번들), esp32 core 3.3.12, PubSubClient 2.8.0 |
+| ESP32 보드 | **연결되지 않음** (COM5/COM6은 식별 불가 serial port, XIAO 아님) |
+
+## 2. 실행 명령어
+
+```bash
+# Docker
+docker compose config -q
+docker compose build mqtt-broker control-gateway
+docker compose up -d mqtt-broker control-gateway
+docker compose ps
+docker compose logs --tail=100 mqtt-broker
+docker compose logs --tail=100 control-gateway
+
+# Gateway unit/app/contract tests
+cd services/control-gateway && pip install -r requirements-dev.txt && pytest -q
+
+# E2E (Docker 실행 중)
+python scripts/integration_test.py --broker-restart
+
+# PC mock device로 xiao-01 흐름 확인
+python scripts/mock_publisher.py --count 3 --interval 10
+
+# Firmware compile
+arduino-cli compile --fqbn esp32:esp32:XIAO_ESP32S3 --warnings all \
+  --build-path D:/Arduino/ArduinoBuild/smart_media-cli smart_media
+```
+
+## 3. 결과 요약
+
+### 3.1 Docker / MQTT Broker
+
+| ID | 항목 | 결과 | 근거 |
+|----|------|------|------|
+| D01 | `docker compose config` | PASS | 오류 없음, 기본 서비스 `mqtt-broker, control-gateway, web-ui` |
+| D02 | `docker compose build` (broker, gateway) | PASS | 두 이미지 Built |
+| D03 | Container 실행 | PASS | `mqtt-broker Up (healthy) 0.0.0.0:1883`, `control-gateway Up (healthy) 0.0.0.0:8000` |
+| D04 | Port 1883 Host 접근 | PASS | Host의 Python paho client가 `localhost:1883` 접속 |
+| B01 | MQTT Publish/Subscribe + JSON 수신 | PASS | `received JSON on smart-media/it-xiao-01/detection: seq=1` |
+| D05 | Container 로그 | PASS | broker: `New client connected ... as control-gateway (p4, c1, k15)` / gateway: `connected, subscribed to ['smart-media/+/detection', 'smart-media/+/status']` |
+| H01 | `GET /health` | PASS | `{"status":"ok","mqtt_connected":true,"mqtt_broker":"mqtt-broker:1883",...}` |
+| H02 | `GET /api/state` | PASS | 시작 직후 `xiao-01: PAUSE / SYSTEM_STARTUP` |
+
+### 3.2 Gateway 시나리오 (E2E: MQTT → Gateway → WebSocket, `scripts/integration_test.py`)
+
+테스트 device_id는 `it-xiao-01` (실제 `xiao-01`과 분리).
+
+| ID | 입력 | 기대 | 실제 | 결과 |
+|----|------|------|------|------|
+| T01 | `true` | PLAY | `PLAY/FACE_PRESENT source=mock face=True` | PASS |
+| T02 | `false` | PAUSE | `PAUSE/FACE_ABSENT source=mock face=False` | PASS |
+| T03 | `true → true` | 중복 없음 | 2초간 WS 메시지 없음 | PASS |
+| T04 | `false → false` | 중복 없음 | 2초간 WS 메시지 없음 | PASS |
+| T05 | 25초 이상 detection 없음 | PAUSE/DEVICE_TIMEOUT | `PAUSE/DEVICE_TIMEOUT after 25.17s` (gateway 로그 `no detection for 25169 ms`) | PASS |
+| T06 | status offline | PAUSE/DEVICE_OFFLINE | `PAUSE/DEVICE_OFFLINE source=system face=None` | PASS |
+| T06b | status online만 | PLAY 안 함 | 2초간 WS 메시지 없음 | PASS |
+| T06c | LWT (TCP 비정상 종료) | PAUSE/DEVICE_OFFLINE | broker가 will 발행 → `PAUSE/DEVICE_OFFLINE` 0.016s 내 수신 | PASS |
+| T07 | 잘못된 JSON, 필수 필드 누락 | 오류 로그, 서버 유지 | `invalid_messages 0 → 2`, `/health status=ok`, WS 메시지 없음 | PASS |
+| T08 | WebSocket 재접속 | 현재 상태 동기화 | 새 연결 첫 메시지 `PLAY/FACE_PRESENT` | PASS |
+| T09 | Broker 재시작 | fail-safe PAUSE, 자동 복구 | `PAUSE/BROKER_DISCONNECTED` → 1.0초 후 `mqtt_connected=true` → `true` 입력 시 PLAY | PASS |
+| T10 | 10초 주기 정상 입력 ×4 (40초) | timeout 없음 | `PLAY, PAUSE, PLAY, PAUSE` (FACE_PRESENT/ABSENT만, DEVICE_TIMEOUT 없음) | PASS |
+
+T07 Gateway 로그:
+
+```
+ERROR gateway: invalid message on smart-media/it-xiao-01/detection: invalid JSON: Expecting property name enclosed in double quotes: line 1 column 2 (char 1) | payload=b'{this is not json'
+ERROR gateway: invalid message on smart-media/it-xiao-01/detection: missing required field 'source' | payload=b'{"schema_version": "1.0", "device_id": "it-xiao-01"}'
+```
+
+T09 Gateway 로그:
+
+```
+02:08:25,370 WARNING gateway.mqtt: disconnected: Unspecified error
+02:08:25,370 WARNING gateway: MQTT broker disconnected -> fail-safe PAUSE
+02:08:25,370 INFO gateway.state: [it-xiao-01] PAUSE (reason=BROKER_DISCONNECTED, source=system, last_source=mock)
+02:08:26,372 INFO gateway.mqtt: connected, subscribed to ['smart-media/+/detection', 'smart-media/+/status']
+```
+
+> 참고: T09 스크립트 출력의 `after -0.375s`는 측정 시작 시점(`docker compose restart` 완료 후)보다 메시지가 먼저 도착해서 생긴 표시상 값입니다. 판정에는 영향 없습니다.
+
+### 3.3 xiao-01 기본 장치 흐름 (PC Mock Publisher, 10초 주기)
+
+`scripts/mock_publisher.py`가 Firmware와 동일한 방식(status online retain + LWT, detection 10초 교차)으로 발행.
+
+| 순서 | MQTT 입력 | WebSocket 수신 (`ts_server_ms`) |
+|------|-----------|-------------------------------|
+| 연결 | – | `PAUSE/SYSTEM_STARTUP` (snapshot) |
+| seq 1 | `true` | `PLAY/FACE_PRESENT` 1793326122828 |
+| seq 2 | `false` | `PAUSE/FACE_ABSENT` 1793326132830 (+10.002 s) |
+| seq 3 | `true` | `PLAY/FACE_PRESENT` 1793326142829 (+9.999 s) |
+| 종료 | status `online:false` | `PAUSE/DEVICE_OFFLINE` 1793326152829 |
+
+결과: PASS (Gateway 로그 `detection xiao-01 seq=N source=mock face=...` → `broadcast ... to 1 client(s)`)
+
+### 3.4 자동화 테스트 (pytest, broker 불필요)
+
+`services/control-gateway/tests/` — **50 passed** (0.66s)
+
+| 파일 | 내용 |
+|------|------|
+| `test_state_manager.py` | T01–T06, T10을 가짜 시계로 검증, broker disconnect, 장치 독립성 |
+| `test_messages.py` | T07: 깨진 JSON, 타입 불일치, 필수 필드 누락, topic/device_id 불일치 |
+| `test_contracts.py` | 4개 Schema Draft 2020-12 유효성 + example 검증, Gateway 출력이 WS Schema와 일치 |
+| `test_app.py` | FastAPI + WebSocket 다중 client broadcast, 재접속 snapshot, retained detection 무시 |
+
+### 3.5 Arduino Firmware
+
+| ID | 항목 | 결과 | 근거 / 사유 |
+|----|------|------|------------|
+| A01 | arduino-cli 컴파일 (XIAO_ESP32S3) | PASS | exit 0, 경고 0, `Sketch uses 859304 bytes (25%)`, `Global variables use 46336 bytes (14%)` |
+| A02 | Arduino IDE GUI 빌드 | NOT_RUN | GUI 미사용 (동일 core/library로 CLI 빌드만 수행) |
+| A03 | 보드 업로드 | NOT_RUN | XIAO ESP32S3 미연결 |
+| A04 | Wi-Fi 연결 | NOT_RUN | 실기기 없음 |
+| A05 | MQTT 연결 / status online / LWT | NOT_RUN | 실기기 없음 (LWT 메커니즘 자체는 T06c에서 PC client로 검증) |
+| A06 | 10초 주기 발행, true/false 교차 | NOT_RUN | 실기기 없음 (동일 동작의 PC mock은 3.3에서 검증) |
+| A07 | Serial Monitor 로그 | NOT_RUN | 실기기 없음 |
+| A08 | Wi-Fi/MQTT 끊김 후 재연결 | NOT_RUN | 실기기 없음 |
+
+#### 수동 확인 절차 (보드 연결 후)
+
+1. `docker compose up -d mqtt-broker control-gateway`
+2. PC LAN IP 확인 (`ipconfig`) → `config.h`의 `MQTT_HOST`에 입력, Wi-Fi 정보 입력
+3. Windows 방화벽에서 TCP 1883 인바운드 허용
+4. 업로드 → Serial Monitor 115200: `[WiFi] Connected`, `[MQTT] Connected`, `[DETECT] seq=1 ... true` 확인 (A04, A05, A07)
+5. 다른 터미널: `docker compose exec mqtt-broker mosquitto_sub -t 'smart-media/#' -v` → 10초 간격 true/false 교차, seq 증가 확인 (A06)
+6. `curl localhost:8000/api/state` → `xiao-01` `last_source: "mock"`, command가 10초마다 PLAY/PAUSE 전환
+7. 보드 USB 분리 → 최대 keepalive×1.5(약 22초) 내 LWT로 `PAUSE/DEVICE_OFFLINE`, 또는 25초 timeout으로 `DEVICE_TIMEOUT` 확인
+8. 공유기 Wi-Fi 끄기/켜기 또는 `docker compose restart mqtt-broker` → Serial에 재연결 로그, 재연결 직후 detection 즉시 발행 확인 (A08)
+
+## 4. 발견된 문제
+
+| # | 문제 | 해결 |
+|---|------|------|
+| 1 | arduino-cli 기본 빌드 경로가 Windows 사용자 폴더(한글 이름)라 링커가 `.elf`를 열지 못함 | `--build-path`를 ASCII 경로로 지정해 해결. Firmware README에 기록 |
+| 2 | `.env`에 값 뒤 인라인 주석(`25000  # ...`)이 있으면 파서에 따라 값 일부로 읽힐 위험 | `.env.example`에서 주석을 별도 줄로 이동 |
+| 3 | 테스트 정리 시 retained status를 빈 payload로 삭제하면 Gateway가 invalid message로 기록 | 빈 payload는 조용히 무시하도록 수정 |
+| 4 | Docker Desktop 데몬이 초기에 꺼져 있었음 | Docker Desktop 실행 후 진행 |
+
+## 5. 남은 작업
+
+- 실기기 테스트 A02–A08
+- C 담당 Web UI와 실제 브라우저/YouTube 연동 테스트 (이번 범위 아님)
+- Broker 인증, 실제 모델 연동 (`docs/model-integration-guide.md`)
+- healthcheck 요청이 10초마다 broker/gateway 로그에 남음 — 필요 시 로그 레벨 조정

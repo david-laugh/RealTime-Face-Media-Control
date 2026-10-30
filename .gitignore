@@ -11,11 +11,16 @@ node_modules/
 # Python
 __pycache__/
 *.pyc
+.venv/
+.pytest_cache/
 
 # IDE / OS
 .vscode/
 .idea/
 .DS_Store
+
+# Firmware local config (Wi-Fi credentials, broker IP)
+firmware/xiao-esp32s3-sense/smart_media/config.h
 
 # Edge Impulse model artifacts (keep directory placeholder only)
 firmware/xiao-esp32s3-sense/models/*
