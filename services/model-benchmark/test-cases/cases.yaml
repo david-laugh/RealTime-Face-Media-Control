@@ -1,0 +1,24 @@
+# 측정 케이스 정의. 새 조건은 행 추가 + enabled: true 만으로 확장한다.
+# label: collector --label 값 (결과 그룹 키)
+# expected_face: true → 검출률(TPR), false → 오탐률(FPR)로 집계
+defaults:
+  duration_s: 30
+  enabled: false
+
+cases:
+  # --- 오늘 범위: 정면 얼굴 있음/없음, NORMAL 조명 ---
+  - {id: face-50-normal,  label: FACE,    distance: 50cm,  env: NORMAL, expected_face: true,  enabled: true}
+  - {id: face-80-normal,  label: FACE,    distance: 80cm,  env: NORMAL, expected_face: true,  enabled: true}
+  - {id: face-120-normal, label: FACE,    distance: 120cm, env: NORMAL, expected_face: true,  enabled: true}
+  - {id: noface-normal,   label: NO_FACE, distance: "-",   env: NORMAL, expected_face: false, enabled: true}
+
+  # --- 추후: 측면/후면 (LEFT_45/RIGHT_45 기대값은 팀 합의 후 확정) ---
+  - {id: left90-80-normal,  label: LEFT_90,  distance: 80cm, env: NORMAL, expected_face: false}
+  - {id: right90-80-normal, label: RIGHT_90, distance: 80cm, env: NORMAL, expected_face: false}
+  - {id: back-80-normal,    label: BACK,     distance: 80cm, env: NORMAL, expected_face: false}
+
+  # --- 추후: 조명 ---
+  - {id: face-80-bright,    label: FACE,    distance: 80cm, env: BRIGHT,    expected_face: true}
+  - {id: noface-bright,     label: NO_FACE, distance: "-",  env: BRIGHT,    expected_face: false}
+  - {id: face-80-lowlight,  label: FACE,    distance: 80cm, env: LOW_LIGHT, expected_face: true}
+  - {id: noface-lowlight,   label: NO_FACE, distance: "-",  env: LOW_LIGHT, expected_face: false}
