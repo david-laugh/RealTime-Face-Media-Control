@@ -6,7 +6,7 @@ SERVICE = Path(__file__).resolve().parent.parent
 CONTRACTS = SERVICE.parent.parent / "contracts" / "mqtt"
 
 
-@pytest.mark.parametrize("name", ["detection.schema.json", "telemetry.schema.json"])
+@pytest.mark.parametrize("name", ["detection.schema.json", "telemetry.schema.json", "status.schema.json"])
 def test_schema_copy_matches_contract(name):
     if not CONTRACTS.exists():
         pytest.skip("contracts/ 없음 (컨테이너 내부 등)")

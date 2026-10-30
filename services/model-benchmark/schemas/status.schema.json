@@ -1,0 +1,45 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://smart-youtube-face-control/contracts/mqtt/status.schema.json",
+  "title": "MQTT Device Status Message",
+  "description": "Topic: smart-media/{device_id}/status. retain=true. online=true is published after connecting; online=false is registered as MQTT Last Will. online=true alone never triggers PLAY.",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "device_id",
+    "source",
+    "online"
+  ],
+  "properties": {
+    "schema_version": {
+      "type": "string",
+      "const": "1.0"
+    },
+    "device_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "source": {
+      "type": "string",
+      "enum": ["mock", "edge_impulse"]
+    },
+    "online": {
+      "type": "boolean"
+    }
+  },
+  "additionalProperties": false,
+  "examples": [
+    {
+      "schema_version": "1.0",
+      "device_id": "xiao-01",
+      "source": "mock",
+      "online": true
+    },
+    {
+      "schema_version": "1.0",
+      "device_id": "xiao-01",
+      "source": "mock",
+      "online": false
+    }
+  ]
+}
