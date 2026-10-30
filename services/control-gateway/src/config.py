@@ -25,6 +25,13 @@ class Settings:
     device_timeout_ms: int = 25000
     timeout_check_interval_ms: int = 1000
 
+    # Debounce (state_manager.DebounceRule). Defaults = switch immediately (mock demo).
+    # Real values wait for the model benchmark; nothing here is a tuned value.
+    play_confirm_count: int = 1
+    play_confirm_ms: int = 0
+    pause_confirm_count: int = 1
+    pause_confirm_ms: int = 0
+
     log_level: str = "INFO"
 
     @property
@@ -46,5 +53,9 @@ def load_settings() -> Settings:
         default_device_id=os.getenv("DEFAULT_DEVICE_ID", "xiao-01"),
         device_timeout_ms=_env_int("DEVICE_TIMEOUT_MS", 25000),
         timeout_check_interval_ms=_env_int("TIMEOUT_CHECK_INTERVAL_MS", 1000),
+        play_confirm_count=_env_int("PLAY_CONFIRM_COUNT", 1),
+        play_confirm_ms=_env_int("PLAY_CONFIRM_MS", 0),
+        pause_confirm_count=_env_int("PAUSE_CONFIRM_COUNT", 1),
+        pause_confirm_ms=_env_int("PAUSE_CONFIRM_MS", 0),
         log_level=os.getenv("LOG_LEVEL", "INFO").upper(),
     )

@@ -2,7 +2,7 @@ import json
 
 import pytest
 
-from conftest import detection_payload
+from conftest import detection_payload, ei_payload
 from messages import MessageError, parse_detection, parse_status, split_topic
 
 
@@ -13,8 +13,45 @@ def test_valid_mock_detection():
 
 
 def test_optional_model_fields_accepted():
-    d = parse_detection(detection_payload(True, confidence=0.84, inference_ms=731), "xiao-01")
-    assert d.confidence == 0.84 and d.inference_ms == 731
+    d = parse_detection(ei_payload(True, 0.84, threshold=0.6, inference_ms=731), "xiao-01")
+    assert d.confidence == 0.84 and d.threshold == 0.6 and d.inference_ms == 731
+    assert d.source == "edge_impulse"
+
+
+@pytest.mark.parametrize("raw", [b"0", b"0.0", b"0.000"])
+def test_edge_impulse_confidence_zero_is_kept(raw):
+    # 0 means "no valid face score" and must not turn into None/null.
+    payload = ei_payload(False, 0.5).replace(b"0.5", raw)
+    d = parse_detection(payload, "xiao-01")
+    assert d.confidence == 0.0 and d.confidence is not None
+    assert d.raw_face_detected is False
+
+
+def test_edge_impulse_below_threshold_score_is_kept():
+    d = parse_detection(ei_payload(False, 0.35, threshold=0.6), "xiao-01")
+    assert (d.raw_face_detected, d.confidence, d.threshold) == (False, 0.35, 0.6)
+
+
+@pytest.mark.parametrize("confidence", ["missing", None])
+def test_edge_impulse_requires_confidence(confidence):
+    data = json.loads(ei_payload(True, 0.9))
+    if confidence == "missing":
+        del data["confidence"]
+    else:
+        data["confidence"] = None
+    with pytest.raises(MessageError):
+        parse_detection(json.dumps(data).encode(), "xiao-01")
+
+
+def test_threshold_is_optional():
+    assert parse_detection(ei_payload(True, 0.9), "xiao-01").threshold is None
+    assert parse_detection(detection_payload(True), "xiao-01").threshold is None
+
+
+def test_mock_confidence_null_accepted_number_rejected():
+    assert parse_detection(detection_payload(True, confidence=None), "xiao-01").confidence is None
+    with pytest.raises(MessageError):
+        parse_detection(detection_payload(True, confidence=0.84), "xiao-01")
 
 
 @pytest.mark.parametrize(
@@ -44,6 +81,9 @@ def test_t07_invalid_json_or_shape(payload):
         ("source", "camera"),
         ("device_id", "xiao-99"),
         ("confidence", 1.5),
+        ("threshold", 1.5),
+        ("threshold", "0.6"),
+        ("threshold", True),
         ("inference_ms", 1.5),
     ],
 )

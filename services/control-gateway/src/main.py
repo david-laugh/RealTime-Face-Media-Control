@@ -13,7 +13,7 @@ from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from config import Settings, load_settings
 from messages import MessageError, parse_detection, parse_status, split_topic
 from mqtt_client import MqttConsumer, MqttEvent
-from state_manager import StateManager, monotonic_ms
+from state_manager import DebounceRule, StateManager, monotonic_ms
 from websocket_manager import ConnectionManager
 
 log = logging.getLogger("gateway")
@@ -22,7 +22,12 @@ log = logging.getLogger("gateway")
 class Gateway:
     def __init__(self, settings: Settings) -> None:
         self.settings = settings
-        self.state = StateManager(settings.device_timeout_ms, settings.default_device_id)
+        self.state = StateManager(
+            settings.device_timeout_ms,
+            settings.default_device_id,
+            play_debounce=DebounceRule(settings.play_confirm_count, settings.play_confirm_ms),
+            pause_debounce=DebounceRule(settings.pause_confirm_count, settings.pause_confirm_ms),
+        )
         self.ws = ConnectionManager()
         self.queue: "asyncio.Queue[MqttEvent]" = asyncio.Queue()
         self.mqtt: Optional[MqttConsumer] = None
@@ -53,8 +58,8 @@ class Gateway:
                     return
                 det = parse_detection(event.payload, device_id)
                 log.info(
-                    "detection %s seq=%d source=%s face=%s",
-                    det.device_id, det.seq, det.source, det.raw_face_detected,
+                    "detection %s seq=%d source=%s face=%s confidence=%s threshold=%s",
+                    det.device_id, det.seq, det.source, det.raw_face_detected, det.confidence, det.threshold,
                 )
                 msg = self.state.handle_detection(det)
             elif kind == "status":
@@ -101,6 +106,11 @@ async def lifespan(app: FastAPI):
         "starting (broker=%s:%d, device_timeout_ms=%d, default_device=%s)",
         settings.mqtt_host, settings.mqtt_port, settings.device_timeout_ms, settings.default_device_id,
     )
+    for name, rule in (("PLAY", gw.state.play_debounce), ("PAUSE", gw.state.pause_debounce)):
+        if rule.enabled:
+            log.warning("%s debounce enabled: min_count=%d, min_ms=%d", name, rule.min_count, rule.min_ms)
+    if gw.state.pause_debounce.min_ms >= settings.device_timeout_ms:
+        log.warning("PAUSE_CONFIRM_MS >= DEVICE_TIMEOUT_MS: face-absent PAUSE will be preceded by DEVICE_TIMEOUT")
 
     tasks = [asyncio.create_task(gw.consume_events()), asyncio.create_task(gw.watch_timeouts())]
     gw.mqtt = MqttConsumer(settings, asyncio.get_running_loop(), gw.queue)

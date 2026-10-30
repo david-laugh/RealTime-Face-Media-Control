@@ -14,7 +14,7 @@ Owner: Member A (Embedded / AI)
 smart_media/                  # Arduino sketch folder (folder name == .ino name)
 ├── smart_media.ino           # setup/loop, Wi-Fi 유지, 10초 비차단 타이머
 ├── config.example.h          # 설정 템플릿 → config.h로 복사 (config.h는 git-ignored)
-├── DetectionResult.h         # Provider 출력 구조체 (향후 confidence/inference_ms 선택 필드)
+├── DetectionResult.h         # Provider 출력 구조체 (confidence/threshold/inference_ms 선택 필드, 계약 주석)
 ├── MockDetectionProvider.h/.cpp  # true/false 교차 Mock
 └── MqttPublisher.h/.cpp      # MQTT 연결/재연결, LWT, detection/status publish
 ```

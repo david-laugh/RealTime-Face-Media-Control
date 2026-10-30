@@ -91,3 +91,32 @@ def test_web_ui_path_ws_alias(client):
     with client.websocket_connect("/ws") as ws:
         msg = ws.receive_json()
         assert (msg["command"], msg["reason"], msg["detail"]) == ("PAUSE", "UNKNOWN", "SYSTEM_STARTUP")
+
+
+def test_debounce_defaults_off(client):
+    debounce = client.get("/api/state").json()["debounce"]
+    assert debounce == {"play": {"min_count": 1, "min_ms": 0}, "pause": {"min_count": 1, "min_ms": 0}}
+
+
+def test_debounce_from_env_suppresses_flicker_over_ws(monkeypatch):
+    monkeypatch.setattr(main, "MqttConsumer", FakeMqtt)
+    monkeypatch.setenv("PAUSE_CONFIRM_COUNT", "3")
+    with TestClient(main.app) as c:
+        assert c.get("/api/state").json()["debounce"]["pause"] == {"min_count": 3, "min_ms": 0}
+        gw = c.app.state.gateway
+        sent = []
+        broadcast = gw.ws.broadcast
+
+        async def record(msg):
+            sent.append(msg["command"])
+            await broadcast(msg)
+
+        gw.ws.broadcast = record
+        with c.websocket_connect("/ws") as ws:
+            assert ws.receive_json()["detail"] == "SYSTEM_STARTUP"
+            for seq, face in enumerate([True, False, True, False, False, False], start=1):
+                inject(c, detection(face, seq))
+            assert ws.receive_json()["command"] == "PLAY"
+            assert ws.receive_json()["command"] == "PAUSE"
+        # The single falses between trues are suppressed; the 3rd consecutive false pauses.
+        assert sent == ["PLAY", "PAUSE"]

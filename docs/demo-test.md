@@ -1,6 +1,6 @@
 # Demo Test Report (A/B Mock Demo)
 
-실행일: 2026-10-30 (1차 KST 11:06–11:10, web-ui 연동 2차 KST 11:20–11:30)
+실행일: 2026-10-30 (1차 KST 11:06–11:10, web-ui 연동 2차 KST 11:20–11:30, Benchmark 피드백 3차 KST 13:00–13:20)
 
 > 원칙: 실제로 실행한 항목만 PASS/FAIL로 기록합니다. 실행하지 않은 항목은 `NOT_RUN`입니다.
 
@@ -13,8 +13,8 @@
 | Mosquitto | `eclipse-mosquitto:2` → 실제 2.1.2 |
 | Gateway | Python 3.12-slim, fastapi 0.115.6, uvicorn 0.32.1, paho-mqtt 2.1.0 |
 | Host 테스트 도구 | Python 3.12.10, pytest 8.3.4, websockets 14.1, jsonschema 4.23.0 |
-| Arduino | arduino-cli 1.5.1 (Arduino IDE 번들), esp32 core 3.3.12, PubSubClient 2.8.0 |
-| ESP32 보드 | **연결되지 않음** (COM5/COM6은 식별 불가 serial port, XIAO 아님) |
+| Arduino | arduino-cli 1.5.1 (Arduino IDE 번들), esp32 core 3.3.12 (1·2차) / **2.0.17 (3차, 로컬 설치 버전이 바뀌어 있었음)**, PubSubClient 2.8.0 |
+| ESP32 보드 | 1·2차: **연결되지 않음**. 3차: 사용자 보드가 `xiao-01`로 broker에 접속해 있는 것을 관찰 (3.7) |
 
 ## 2. 실행 명령어
 
@@ -109,7 +109,7 @@ T09 Gateway 로그:
 
 ### 3.4 자동화 테스트 (pytest, broker 불필요)
 
-`services/control-gateway/tests/` — 1차 **50 passed**, web-ui 연동 수정 후 2차 **54 passed** (0.37s)
+`services/control-gateway/tests/` — 1차 **50 passed**, web-ui 연동 수정 후 2차 **54 passed** (0.37s), 3차 **96 passed** (3.7)
 
 | 파일 | 내용 |
 |------|------|
@@ -122,7 +122,7 @@ T09 Gateway 로그:
 
 | ID | 항목 | 결과 | 근거 / 사유 |
 |----|------|------|------------|
-| A01 | arduino-cli 컴파일 (XIAO_ESP32S3) | PASS | exit 0, 경고 0, `Sketch uses 859304 bytes (25%)`, `Global variables use 46336 bytes (14%)` |
+| A01 | arduino-cli 컴파일 (XIAO_ESP32S3) | PASS | 1차(core 3.3.12): exit 0, 경고 0, `Sketch uses 859304 bytes (25%)`, `Global variables use 46336 bytes (14%)`. 3차(core 2.0.17, threshold 추가 후): exit 0, 경고 0, `674081 bytes (20%)`, `44328 bytes (13%)` |
 | A02 | Arduino IDE GUI 빌드 | NOT_RUN | GUI 미사용 (동일 core/library로 CLI 빌드만 수행) |
 | A03 | 보드 업로드 | NOT_RUN | XIAO ESP32S3 미연결 |
 | A04 | Wi-Fi 연결 | NOT_RUN | 실기기 없음 |
@@ -186,6 +186,59 @@ Gateway → 브라우저 전달 지연(web-ui 표시 `전달 Nms`, 같은 PC): 0
   → 시연 중에는 `integration_test.py`를 실행하지 말고, 실행했다면 `docker compose restart control-gateway`로 테스트 장치 상태를 지우세요.
 - 화면 문구 "정면 얼굴이 보여서 재생합니다."는 이번 버전(얼굴 존재 여부만 판단)에서는 "얼굴이 보여서"의 의미입니다.
 
+### 3.7 Benchmark 피드백 반영 (3차)
+
+변경: detection 계약(`confidence` 규칙, `threshold`), Firmware `DetectionResult.threshold`, Gateway debounce 구조(기본 꺼짐).
+
+#### pytest — **96 passed** (0.45s)
+
+| 구분 | 검증 내용 | 결과 |
+|------|-----------|------|
+| Schema/Contract | `edge_impulse`에 `confidence` 없음/`null` → 거부 | PASS |
+| | `confidence: 0` (`0`, `0.0`, `0.000`) → `0.0`으로 유지, WebSocket에도 `0` (null 아님) | PASS |
+| | threshold 미만 점수(`false`, 0.35, threshold 0.6) 유지 | PASS |
+| | `threshold` 있음/없음 모두 허용, 범위 밖·문자열·bool 거부, `confidence`와 같은 0–1 척도 | PASS |
+| | `raw_face_detected:false` + `bbox` → Schema 거부, 미검출 시 `bbox` 생략 payload 허용 | PASS |
+| | Mock payload(필드 생략 / `confidence:null`) 허용, Mock + 숫자 `confidence`·`threshold` 거부 | PASS |
+| | `state` 필드 재등장, `source` 누락 → 거부 | PASS |
+| | Firmware 형태 payload(`"confidence":0.000`, `"threshold":0.600`) Schema 통과 | PASS |
+| Gateway | 기존 T01–T10 상태 머신, 중복 명령 방지, WS snapshot/broadcast (기존 테스트 전부) | PASS |
+| | debounce 기본값 = 꺼짐: `T,F,T,F,T,F,T` → 7번 모두 전환 (기존 동작 동일) | PASS |
+| | `PAUSE_CONFIRM_MS=5000`(2.3 s 간격 입력): 깜빡임 → PLAY 1회만, 지속 false → PAUSE | PASS |
+| | `PAUSE_CONFIRM_COUNT=3`: 깜빡임 억제, 연속 3회 false → PAUSE | PASS |
+| | PLAY/PAUSE 규칙 독립 (`PLAY 2회`, `PAUSE 3회`) | PASS |
+| | Fail-safe: PAUSE debounce를 매우 길게(100회/600 s) 해도 timeout(정확히 25 s)·offline·broker 끊김 즉시 PAUSE, 후보 폐기 | PASS |
+| | offline 후 이전 PLAY 후보가 재사용되지 않음 | PASS |
+| | 환경변수 → `/api/state.debounce` 반영, WebSocket 실제 전송이 `PLAY, PAUSE` 2건뿐 | PASS |
+
+(테스트 수치는 동작 검증용 입력이며 권장값이 아닙니다.)
+
+#### Docker 실측
+
+| ID | 항목 | 결과 | 근거 |
+|----|------|------|------|
+| R1 | `integration_test.py --broker-restart` (기본 설정, debounce 꺼짐) | **14/14 PASS** | `T05 DEVICE_TIMEOUT after 25.83s`, `T10` 4회 전환 |
+| L1 | `PAUSE_CONFIRM_COUNT=3`으로 재시작, edge_impulse `T,F,T,F,T,F` 발행 | PASS | WebSocket `PLAY` 1건만 (`confidence 0.82`), 로그 `PAUSE candidate cancelled` |
+| L2 | `edge_impulse` + `confidence` 누락 | PASS | `invalid_messages 0→1`, 상태 변화 없음 |
+| L3 | 연속 false 3회 (마지막 `confidence:0`) | PASS | `PAUSE / FACE_ABSENT`, `confidence 0.0` |
+| L4 | PAUSE 후보 대기 중 status offline | PASS | 즉시 `PAUSE / DEVICE_OFFLINE` (0.000 s) |
+| – | 확인 후 기본 설정으로 Gateway 재시작 | 완료 | `/api/state.debounce` = 1/0, 장치 `xiao-01`만 |
+
+#### web-ui 브라우저 회귀 (`scripts/webui_e2e_test.py`)
+
+| 결과 | 내용 |
+|------|------|
+| W1–W4, W7, W8 PASS | 표시 문구 / YouTube 상태 기존과 동일 |
+| **W5, W6 FAIL (외부 간섭)** | 테스트 중 **사용자의 실제 보드가 같은 `xiao-01`로 10초마다 발행**하고 있었음. W5(25초 무발행 기대) 구간에 보드의 `PLAY`가 들어왔고, W6 broker 재시작 직후에는 보드의 이전 상태 때문에 기대와 다른 문구가 표시됨. Gateway 코드 문제 아님. 보드를 끈 뒤 재실행 필요 → **NOT_RUN(재실행 필요)** |
+
+#### 실기기 관찰 (사용자 보드, 직접 조작하지 않음)
+
+`mosquitto_sub -t 'smart-media/#'` 및 broker 로그에서 관찰한 내용입니다. 보드 업로드·Serial Monitor는 이 테스트에서 하지 않았습니다.
+
+- client id `xiao-01`, keepalive 15 s (`p4, c1, k15`) — Firmware 설정과 일치 (PC mock은 `xiao-01-pc-mock`)
+- `status {"online":true}` retained, detection `seq 98 → 99`, `uptime_ms 967763 → 977763` (정확히 10초 간격), `source:"mock"`, true/false 교차
+- broker 재시작(W6) 후 같은 client id로 재접속 기록 (`04:12:03`, `04:12:07`)
+
 ## 4. 발견된 문제
 
 | # | 문제 | 해결 |
@@ -196,10 +249,15 @@ Gateway → 브라우저 전달 지연(web-ui 표시 `전달 Nms`, 같은 PC): 0
 | 4 | Docker Desktop 데몬이 초기에 꺼져 있었음 | Docker Desktop 실행 후 진행 |
 | 5 | web-ui(`/ws`, reason 4종)와 Gateway(`/ws/media`, reason 6종) 규약 불일치 → web-ui 연결 불가 (HTTP 403) | Gateway를 web-ui 규약에 맞춤 (3.6) |
 | 6 | Claude in Chrome 확장 미연결 | 설치된 Chrome을 headless + DevTools Protocol로 직접 구동해 대체 |
+| 7 | 실제 보드가 `xiao-01`로 발행 중이라 `webui_e2e_test.py` W5/W6가 간섭받음 | 브라우저 E2E는 보드 전원을 끄고 실행 (web-ui가 device_id를 필터링하지 않음) |
+| 8 | 로컬 esp32 core가 3.3.12 → 2.0.17로 바뀌어 있었음 | 2.0.17로 컴파일 확인. 공용 Arduino 폴더라 3.3.12를 재설치하지 않음 |
+| 9 | `services/model-benchmark/schemas/detection.schema.json`(D 사본)이 새 계약과 달라짐 | D 브랜치 범위라 수정하지 않음. D 담당이 다시 복사 필요 (`test_schemas_sync.py`) |
 
 ## 5. 남은 작업
 
-- 실기기 테스트 A02–A08
+- 실기기 테스트 A02–A08 (3차에서 보드 발행·재접속은 관찰됨, 직접 수행한 테스트는 아님)
+- 보드를 끈 상태에서 `webui_e2e_test.py` W5/W6 재실행
+- Benchmark 결과를 받은 뒤 debounce 수치 결정 및 실기기 검증
 - 사람이 직접 보는 브라우저(헤드리스 아님)에서 실기기 ESP32와 함께 최종 시연 확인
 - Broker 인증, 실제 모델 연동 (`docs/model-integration-guide.md`)
 - healthcheck 요청이 10초마다 broker/gateway 로그에 남음 — 필요 시 로그 레벨 조정

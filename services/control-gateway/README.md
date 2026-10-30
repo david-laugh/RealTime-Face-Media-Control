@@ -38,6 +38,12 @@ mqtt-broker ──smart-media/+/detection, +/status──▶ control-gateway ─
 | `DEFAULT_DEVICE_ID` | `xiao-01` | 시작 시 PAUSE/SYSTEM_STARTUP 상태로 생성 |
 | `DEVICE_TIMEOUT_MS` | `25000` | 마지막 detection 이후 이 시간 경과 시 PAUSE |
 | `TIMEOUT_CHECK_INTERVAL_MS` | `1000` | timeout 검사 주기 |
+| `PLAY_CONFIRM_COUNT` | `1` | PAUSE→PLAY 확정에 필요한 연속 `true` 수 (1 = 즉시) |
+| `PLAY_CONFIRM_MS` | `0` | PAUSE→PLAY 확정에 필요한 첫 `true`부터의 시간 |
+| `PAUSE_CONFIRM_COUNT` | `1` | PLAY→PAUSE 확정에 필요한 연속 `false` 수 (1 = 즉시) |
+| `PAUSE_CONFIRM_MS` | `0` | PLAY→PAUSE 확정에 필요한 첫 `false`부터의 시간 |
+
+Debounce 4개 값은 기본이 "꺼짐"이며, 최종 수치는 Benchmark 측정 후 정합니다. timeout / offline / broker 끊김 PAUSE에는 적용되지 않습니다 (`docs/model-integration-guide.md` §4).
 | `LOG_LEVEL` | `INFO` | |
 
 ## 실행
