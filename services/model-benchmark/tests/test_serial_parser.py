@@ -84,3 +84,33 @@ def test_face_label_filter():
         parser.feed(line, now=1)
     bridge.handle(parser.flush())
     assert pubs[0]["raw_face_detected"] is False
+
+
+# 실기기 샘플 (XIAO ESP32S3, 115200 baud). 줄 끝 공백/빈 줄 포함
+REAL_NO_FACE = ["Predictions (DSP: 4 ms., Classification: 2275 ms., Anomaly: 0 ms.): \r\n",
+                "Object detection bounding boxes:\r\n", "\r\n", "   \r\n"]
+REAL_FACE = ["Predictions (DSP: 4 ms., Classification: 2275 ms., Anomaly: 0 ms.): \r\n",
+             "Object detection bounding boxes:  \r\n",
+             "  face (0.804688) [ x: 40, y: 40, width: 8, height: 8 ]  \r\n", "\r\n"]
+
+
+def test_real_sample():
+    parser, pubs, logs = run(REAL_NO_FACE + REAL_FACE)
+    no, yes = detections(pubs)
+    assert (no["raw_face_detected"], no["confidence"], no["bbox"]) == (False, 0, None)
+    assert yes["raw_face_detected"] is True and yes["confidence"] == 0.8047
+    assert yes["bbox"] == {"x": 0.4167, "y": 0.4167, "w": 0.0833, "h": 0.0833}
+    assert yes["inference_ms"] == 2275
+    tel = [m for t, m in pubs if t.endswith("/telemetry")][0]
+    assert tel["preprocess_ms"] == 4 and tel["inference_ms"] == 2275
+    assert parser.ignored == parser.suspicious == parser.parse_failures == 0 and not logs
+
+
+def test_below_threshold_keeps_confidence_for_sweep():
+    _, pubs, _ = run([REAL_FACE[0], REAL_FACE[1],
+                      "  face (0.312500) [ x: 8, y: 8, width: 8, height: 8 ]\n",
+                      "  face (0.250000) [ x: 16, y: 8, width: 8, height: 8 ]\n"])
+    det = detections(pubs)[0]
+    assert det["raw_face_detected"] is False and det["state"] == "NOT_PRESENT"
+    assert det["confidence"] == 0.3125 and det["bbox"] is None
+    assert common.validate("detection", det) == []

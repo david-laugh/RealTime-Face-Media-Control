@@ -6,8 +6,15 @@
   "  %s (%f) [ x: %u, y: %u, width: %u, height: %u ]"
 200자 초과 또는 숫자 나열이 긴 줄(debug_nn features 덤프 의심)은 내용 없이 경고 카운트만 남긴다.
 
-seq / uptime_ms 는 시리얼에 없으므로 bridge 가 생성한다 (uptime_ms = bridge 시작 후 경과 시간).
-state 는 디바이스 판정 알고리즘이 없어 raw 결과를 그대로 매핑한다.
+변환 규칙:
+- 한 프레임의 박스 중 최고 confidence 박스 사용. 박스가 없으면 confidence=0, bbox=null.
+- raw_face_detected = (최고 confidence >= --threshold). 기기는 0.2 이상을 모두 출력하므로
+  임계값 미만이어도 confidence 는 그대로 보내 analyzer 가 임계값 스윕에 쓴다 (이때 bbox=null).
+- DSP → telemetry.preprocess_ms, Classification → inference_ms.
+- bbox 는 --input-width/--input-height 로 나눈 0~1 값. FOMO 는 중심점 검출 모델이라
+  width/height 는 얼굴 크기가 아니라 출력 격자 셀 크기(예: 96x96 입력 → 8px)다. 위치(x, y)만 의미 있음.
+- seq / uptime_ms 는 시리얼에 없으므로 bridge 가 생성 (uptime_ms = bridge 시작 후 경과 시간).
+- state 는 디바이스 판정 알고리즘이 없어 raw_face_detected 를 그대로 매핑.
 """
 import argparse
 import json
@@ -58,7 +65,9 @@ class SerialParser:
 
     def feed(self, line: str, now: float | None = None) -> Frame | None:
         """한 줄 처리. 새 프레임이 시작되면 이전 프레임을 반환."""
-        line = line.rstrip("\r\n")
+        line = line.strip()
+        if not line:
+            return None
         if len(line) > MAX_LINE_LEN or len(NUM_RE.findall(line)) > MAX_NUMBERS:
             self.suspicious += 1
             if self.suspicious == 1 or self.suspicious % 100 == 0:
@@ -75,7 +84,7 @@ class SerialParser:
             self.current = Frame(int(m[1]), int(m[2]), time.monotonic() if now is None else now)
             return done
 
-        if line.strip() == BOXES_HEADER:
+        if line == BOXES_HEADER:
             self.in_boxes = self.current is not None
             return None
 
@@ -107,8 +116,10 @@ def _clamp01(v: float) -> float:
 class Bridge:
     """Frame → 스키마 메시지 생성 및 publish. publish(topic, dict) 주입 가능."""
 
-    def __init__(self, publish, device_id, model_id, input_w, input_h, face_labels=None, start=None):
+    def __init__(self, publish, device_id, model_id, input_w, input_h, face_labels=None, start=None,
+                 threshold=0.5):
         self.publish = publish
+        self.threshold = threshold
         self.device_id, self.model_id = device_id, model_id
         self.input_w, self.input_h = input_w, input_h
         self.face_labels = set(face_labels or [])
@@ -119,17 +130,18 @@ class Bridge:
     def handle(self, frame: Frame):
         boxes = [b for b in frame.boxes if not self.face_labels or b.label in self.face_labels]
         best = max(boxes, key=lambda b: b.conf, default=None)
+        face = best is not None and best.conf >= self.threshold
         uptime_ms = max(int((frame.t_host - self.start) * 1000), 0)
         det = {
             "schema_version": common.SCHEMA_VERSION, "device_id": self.device_id, "seq": self.det_seq,
             "uptime_ms": uptime_ms, "model_id": self.model_id,
-            "raw_face_detected": best is not None,
+            "raw_face_detected": face,
             "confidence": _clamp01(best.conf) if best else 0,
-            "bbox": None if best is None else {
+            "bbox": None if not face else {
                 "x": _clamp01(best.x / self.input_w), "y": _clamp01(best.y / self.input_h),
                 "w": _clamp01(best.w / self.input_w), "h": _clamp01(best.h / self.input_h)},
             "inference_ms": frame.classification_ms,
-            "state": "FRONT_PRESENT" if best else "NOT_PRESENT",
+            "state": "FRONT_PRESENT" if face else "NOT_PRESENT",
         }
         tel = {
             "schema_version": common.SCHEMA_VERSION, "device_id": self.device_id, "seq": self.tel_seq,
@@ -154,6 +166,7 @@ def main():
     p.add_argument("--input-width", type=int, required=True)
     p.add_argument("--input-height", type=int, required=True)
     p.add_argument("--face-label", action="append", help="얼굴로 볼 라벨 (기본: 모든 라벨)")
+    p.add_argument("--threshold", type=float, default=0.5, help="raw_face_detected 판정 임계값")
     p.add_argument("--mqtt-host", default="localhost")
     p.add_argument("--mqtt-port", type=int, default=common.MQTT_PORT)
     p.add_argument("--stats-every", type=float, default=30, help="통계 출력 주기(초)")
@@ -166,7 +179,7 @@ def main():
     client.loop_start()
     parser = SerialParser()
     bridge = Bridge(lambda t, m: client.publish(t, json.dumps(m)), args.device_id, args.model_id,
-                    args.input_width, args.input_height, args.face_label)
+                    args.input_width, args.input_height, args.face_label, threshold=args.threshold)
     print(f"[bridge] {args.port}@{args.baud} → smart-media/{args.device_id}/* ({args.mqtt_host}:{args.mqtt_port})")
 
     last_stats = time.monotonic()
