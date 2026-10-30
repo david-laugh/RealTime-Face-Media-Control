@@ -7,7 +7,7 @@
 200자 초과 또는 숫자 나열이 긴 줄(debug_nn features 덤프 의심)은 내용 없이 경고 카운트만 남긴다.
 
 변환 규칙:
-- source = "edge_impulse".
+- source = "edge_impulse", threshold = --threshold (판정 기준). confidence 는 항상 전송 (박스 없으면 0).
 - 한 프레임의 박스 중 최고 confidence 박스 사용. 박스가 없으면 confidence=0, bbox 필드 생략.
 - raw_face_detected = (최고 confidence >= --threshold, 기본 0.6 = 모델 원래 판정 기준).
   기기는 출력 임계값(0.2) 이상 박스를 모두 출력하므로 임계값 미만이어도 confidence 는 그대로 보내
@@ -131,13 +131,15 @@ class Bridge:
     def handle(self, frame: Frame):
         boxes = [b for b in frame.boxes if not self.face_labels or b.label in self.face_labels]
         best = max(boxes, key=lambda b: b.conf, default=None)
-        face = best is not None and best.conf >= self.threshold
+        conf = _clamp01(best.conf) if best else 0
+        face = best is not None and conf >= self.threshold  # 계약: raw == (confidence >= threshold)
         uptime_ms = max(int((frame.t_host - self.start) * 1000), 0)
         det = {
             "schema_version": common.SCHEMA_VERSION, "device_id": self.device_id, "seq": self.det_seq,
             "uptime_ms": uptime_ms, "source": "edge_impulse", "model_id": self.model_id,
             "raw_face_detected": face,
-            "confidence": _clamp01(best.conf) if best else 0,
+            "confidence": conf,
+            "threshold": self.threshold,
             "inference_ms": frame.classification_ms,
         }
         if face:

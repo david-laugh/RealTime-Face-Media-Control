@@ -38,7 +38,7 @@ docker compose exec model-benchmark python src/analyzer.py --date 20261030
 
 ### 판정/지표 규칙
 
-- `source`: serial_bridge = `edge_impulse`, mock = `mock` (mock은 confidence/inference_ms/bbox 미전송).
+- `source`: serial_bridge = `edge_impulse` (`confidence` 항상 전송, `threshold` = 판정 기준 `--threshold`), mock = `mock` (confidence/threshold/inference_ms/bbox 미전송).
 - 프레임마다 최고 confidence 박스 사용. 박스 없음 → `confidence=0`, `bbox` 필드 생략.
 - `raw_face_detected` = confidence ≥ bridge `--threshold`. 기기는 출력 임계값(`--device-threshold`) 이상 박스를 모두 출력하므로
   analyzer 임계값 스윕(0.3~0.9)은 저장된 confidence로 계산합니다.
