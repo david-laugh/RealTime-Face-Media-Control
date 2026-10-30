@@ -1,6 +1,8 @@
-# smart-youtube-face-control — Docker Compose skeleton
+# smart-youtube-face-control — Docker Compose
 #
-# NOTE: Containers below are skeletons only. No business logic is implemented.
+# Implemented (demo): mqtt-broker, control-gateway
+# Skeleton (owned by other members): web-ui, model-benchmark
+#   docker compose up -d mqtt-broker control-gateway   -> A/B demo
 #   docker compose up                       -> mqtt-broker, control-gateway, web-ui
 #   docker compose --profile benchmark up   -> + model-benchmark
 #
@@ -20,6 +22,12 @@ services:
       - ./services/mqtt-broker/config/mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
       - ./services/mqtt-broker/data:/mosquitto/data
       - ./services/mqtt-broker/log:/mosquitto/log
+    healthcheck:
+      test: ["CMD-SHELL", "mosquitto_sub -h 127.0.0.1 -p 1883 -t '$$SYS/broker/uptime' -C 1 -W 3 >/dev/null || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 5s
     networks:
       - smart-media-network
     restart: unless-stopped
@@ -32,13 +40,18 @@ services:
       - path: .env
         required: false
     environment:
-      MQTT_HOST: ${MQTT_HOST:-mqtt-broker}
+      # Docker-internal broker address (fixed; the ESP32 uses the host LAN IP instead)
+      MQTT_HOST: mqtt-broker
       MQTT_PORT: 1883
       MQTT_TOPIC_PREFIX: ${MQTT_TOPIC_PREFIX:-smart-media}
+      DEFAULT_DEVICE_ID: ${DEVICE_ID:-xiao-01}
+      DEVICE_TIMEOUT_MS: ${DEVICE_TIMEOUT_MS:-25000}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
     ports:
       - "${GATEWAY_PORT:-8000}:8000"
     depends_on:
-      - mqtt-broker
+      mqtt-broker:
+        condition: service_healthy
     networks:
       - smart-media-network
     restart: unless-stopped
