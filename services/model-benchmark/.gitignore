@@ -1,0 +1,30 @@
+# 측정 결과 (대용량). 디렉터리 구조만 유지
+results/*
+!results/.gitkeep
+
+# 개인정보 보호: 이미지/바이너리/원시 데이터 차단
+*.jpg
+*.jpeg
+*.png
+*.bmp
+*.gif
+*.raw
+*.bin
+*.npy
+*.rgb
+
+# Edge Impulse Arduino 라이브러리 (각자 Studio에서 다운로드)
+bench-sketch/**/*.zip
+bench-sketch/lib/
+bench-sketch/libraries/
+**/ei-*-arduino-*/
+**/*_inferencing/
+edge-impulse-sdk/
+model-parameters/
+tflite-model/
+
+# Python
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
