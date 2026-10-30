@@ -12,6 +12,8 @@ defaults:
 cases:
   # --- 오늘 범위: 정면 얼굴(화면 중앙) 있음/없음, NORMAL 조명 ---
   - {id: face-50-normal,  label: FACE,    distance: 50cm,  env: NORMAL, expected_face: true,  enabled: true}
+  - {id: face-60-normal,  label: FACE,    distance: 60cm,  env: NORMAL, expected_face: true,  enabled: true}  # 경계 탐색
+  - {id: face-70-normal,  label: FACE,    distance: 70cm,  env: NORMAL, expected_face: true,  enabled: true}  # 경계 탐색
   - {id: face-80-normal,  label: FACE,    distance: 80cm,  env: NORMAL, expected_face: true,  enabled: true}
   - {id: face-120-normal, label: FACE,    distance: 120cm, env: NORMAL, expected_face: true,  enabled: true}
   - {id: noface-normal,   label: NO_FACE, position: "-", distance: "-", env: NORMAL, expected_face: false, enabled: true}
