@@ -1,4 +1,4 @@
-# smart-youtube-face-control
+# RealTime-Face-Media-Control
 
 > ⚠️ **Skeleton Repository — 실제 기능 코드는 아직 구현되지 않았습니다.**
 > 현재는 Repository 구조, Docker Container 골격, 통신 Contract(JSON Schema), 설계 문서 템플릿만 포함합니다.
