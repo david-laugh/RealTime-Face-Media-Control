@@ -191,7 +191,7 @@ def aggregate(sessions, hold_out: list | None = None):
                 "label": label, "position": position, "distance": distance, "env": env,
                 "expected_face": expected, "t": t, "hold_s": hold_s,
                 "wrong_pause": pauses if expected and has_conf else None,
-                "play_ratio": play_ms / span_ms if expected and has_conf and span_ms else None,
+                "play_ratio": play_ms / span_ms if has_conf and span_ms else None,
                 "wrong_play": plays if not expected and has_conf else None,
                 "pause_latency_s_est": hold_s,
             })
@@ -253,8 +253,8 @@ def write_reports(rows, metas, out_dir: Path, hold_rows=()):
         "한 번도 검출되지 않은 세션은 PAUSE 오류 0 / 재생 비율 0 이므로 debounce 로 해결할 수 없다.", "",
         "### FACE 세션: 잘못된 PAUSE (정면인데 멈춤), 재생 상태 시간 비율", "",
         md_table([*key, "t", "hold_s", "wrong_pause", "play_ratio", "pause_latency_s_est"], face_hold), "",
-        "### NO_FACE 세션: 잘못된 PLAY", "",
-        md_table([*key, "t", "hold_s", "wrong_play", "pause_latency_s_est"], noface_hold), "",
+        "### NO_FACE 계열 세션 (빈 화면, 측면 등): 잘못된 PLAY 횟수, 재생 상태 시간 비율", "",
+        md_table([*key, "t", "hold_s", "wrong_play", "play_ratio", "pause_latency_s_est"], noface_hold), "",
     ]
     (out_dir / "summary.md").write_text("\n".join(parts), encoding="utf-8")
 
