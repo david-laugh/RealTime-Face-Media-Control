@@ -13,7 +13,7 @@ import common
 
 THRESHOLDS = [round(0.3 + 0.1 * i, 1) for i in range(7)]  # 0.3 ~ 0.9
 DEBOUNCE_FRAMES = [1, 2, 3, 4, 5]
-META_COLUMNS = ["session_id", "label", "distance", "env", "operator", "started_at", "deploy",
+META_COLUMNS = ["session_id", "label", "position", "distance", "env", "operator", "started_at", "deploy",
                 "esp_nn", "color", "device_threshold", "bridge_threshold", "download_date", "lighting", "camera_height", "camera_position", "notes"]
 
 
@@ -108,11 +108,12 @@ def session_metrics(meta, records):
 def aggregate(sessions):
     groups = defaultdict(list)
     for meta, records in sessions:
-        key = (meta.get("model_id"), meta["label"], meta["distance"], meta["env"], meta.get("expected_face"))
+        key = (meta.get("model_id"), meta["label"], meta.get("position", "CENTER"), meta["distance"],
+               meta["env"], meta.get("expected_face"))
         groups[key].append(session_metrics(meta, records))
 
     rows = []
-    for (model_id, label, distance, env, expected), ms in sorted(groups.items(), key=lambda kv: tuple(map(str, kv[0]))):
+    for (model_id, label, position, distance, env, expected), ms in sorted(groups.items(), key=lambda kv: tuple(map(str, kv[0]))):
         faces = [f for m in ms for f in m["faces"]]
         confs = [c for m in ms for c in m["confs"]]
         inf = [x for m in ms for x in m["inference_ms"]]
@@ -121,7 +122,7 @@ def aggregate(sessions):
         recv, exp = sum(m["seq_received"] for m in ms), sum(m["seq_expected"] for m in ms)
         n = len(faces)
         row = {
-            "model_id": model_id, "label": label, "distance": distance, "env": env,
+            "model_id": model_id, "label": label, "position": position, "distance": distance, "env": env,
             "expected_face": expected, "metric": "detection_rate" if expected else "false_positive_rate",
             "sessions": len(ms), "frames": n, "invalid_msgs": sum(m["invalid"] for m in ms),
             "face_rate": sum(faces) / n if n else None,
@@ -163,7 +164,7 @@ def write_reports(rows, metas, out_dir: Path):
             w = csv.DictWriter(f, fieldnames=list(rows[0]))
             w.writeheader()
             w.writerows(rows)
-    key = ["label", "distance", "env"]
+    key = ["label", "position", "distance", "env"]
     parts = [
         "# Model Benchmark Summary", "",
         "판정 기준: `raw_face_detected`. FACE 계열은 검출률, NO_FACE 계열은 오탐률.", "",
