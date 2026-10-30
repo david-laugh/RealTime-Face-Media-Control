@@ -1,0 +1,81 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://smart-youtube-face-control/contracts/mqtt/telemetry.schema.json",
+  "title": "MQTT Device Telemetry Message",
+  "description": "Topic: smart-media/{device_id}/telemetry. Periodic device performance metrics consumed by Model Benchmark.",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "device_id",
+    "seq",
+    "uptime_ms",
+    "model_id"
+  ],
+  "properties": {
+    "schema_version": {
+      "type": "string",
+      "const": "1.0"
+    },
+    "device_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "seq": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "uptime_ms": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "model_id": {
+      "type": "string"
+    },
+    "capture_ms": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Camera capture time."
+    },
+    "preprocess_ms": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Image resize / conversion time."
+    },
+    "inference_ms": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "fps": {
+      "type": "number",
+      "minimum": 0
+    },
+    "free_heap_bytes": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "free_psram_bytes": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "wifi_rssi_dbm": {
+      "type": "integer"
+    }
+  },
+  "additionalProperties": false,
+  "examples": [
+    {
+      "schema_version": "1.0",
+      "device_id": "xiao-01",
+      "seq": 31,
+      "uptime_ms": 124600,
+      "model_id": "ei-541658-fomo01-int8",
+      "capture_ms": 45,
+      "preprocess_ms": 60,
+      "inference_ms": 731,
+      "fps": 1.2,
+      "free_heap_bytes": 180000,
+      "free_psram_bytes": 7800000,
+      "wifi_rssi_dbm": -58
+    }
+  ]
+}

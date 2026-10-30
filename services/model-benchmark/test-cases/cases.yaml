@@ -1,0 +1,38 @@
+# 측정 케이스 정의. 새 조건은 행 추가 + enabled: true 만으로 확장한다.
+# label: collector --label 값 (결과 그룹 키)
+# position: CENTER = 얼굴을 카메라 화면 중앙에 둠 (FACE 조건의 정의)
+#           OFFSET_LEFT/OFFSET_RIGHT = 정면을 보되 몸을 옆으로 이동, 얼굴 없음은 "-"
+# expected_face: true → 검출률(TPR), false → 오탐률(FPR)로 집계
+# duration_s: 추론 ~2.3s/프레임이므로 기본 120s (~50 프레임)
+defaults:
+  position: CENTER
+  duration_s: 120
+  enabled: false
+
+cases:
+  # --- 오늘 범위: 정면 얼굴(화면 중앙) 있음/없음, NORMAL 조명 ---
+  - {id: face-50-normal,  label: FACE,    distance: 50cm,  env: NORMAL, expected_face: true,  enabled: true}
+  - {id: face-60-normal,  label: FACE,    distance: 60cm,  env: NORMAL, expected_face: true,  enabled: false}  # 경계 탐색용, 미측정 (진행 안 하기로 함)
+  - {id: face-70-normal,  label: FACE,    distance: 70cm,  env: NORMAL, expected_face: true,  enabled: false}  # 경계 탐색용, 미측정 (진행 안 하기로 함)
+  - {id: face-80-normal,  label: FACE,    distance: 80cm,  env: NORMAL, expected_face: true,  enabled: true}
+  - {id: face-120-normal, label: FACE,    distance: 120cm, env: NORMAL, expected_face: true,  enabled: true}
+  - {id: noface-normal,   label: NO_FACE, position: "-", distance: "-", env: NORMAL, expected_face: false, enabled: true}
+
+  # --- 추후: 화면 내 위치 (정면 응시, 몸을 옆으로 이동). 240x240 중앙 크롭 밖이면 미검출 예상 ---
+  - {id: face-80-offleft-normal,  label: FACE, position: OFFSET_LEFT,  distance: 80cm, env: NORMAL, expected_face: true}
+  - {id: face-80-offright-normal, label: FACE, position: OFFSET_RIGHT, distance: 80cm, env: NORMAL, expected_face: true}
+
+  # --- 측면 45도: 기대값 NOT_PRESENT (expected_face: false) 는 팀 합의 전 잠정 ---
+  - {id: left45-50-normal,  label: LEFT_45,  distance: 50cm, env: NORMAL, expected_face: false, enabled: true}  # 잠정
+  - {id: right45-50-normal, label: RIGHT_45, distance: 50cm, env: NORMAL, expected_face: false, enabled: true}  # 잠정
+
+  # --- 추후: 측면 90도/후면 (미측정) ---
+  - {id: left90-80-normal,  label: LEFT_90,  distance: 80cm, env: NORMAL, expected_face: false}
+  - {id: right90-80-normal, label: RIGHT_90, distance: 80cm, env: NORMAL, expected_face: false}
+  - {id: back-80-normal,    label: BACK,     distance: 80cm, env: NORMAL, expected_face: false}
+
+  # --- 추후: 조명 ---
+  - {id: face-80-bright,    label: FACE,    distance: 80cm, env: BRIGHT,    expected_face: true}
+  - {id: noface-bright,     label: NO_FACE, position: "-", distance: "-", env: BRIGHT,    expected_face: false}
+  - {id: face-80-lowlight,  label: FACE,    distance: 80cm, env: LOW_LIGHT, expected_face: true}
+  - {id: noface-lowlight,   label: NO_FACE, position: "-", distance: "-", env: LOW_LIGHT, expected_face: false}

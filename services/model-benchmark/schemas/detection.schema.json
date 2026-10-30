@@ -1,0 +1,161 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://smart-youtube-face-control/contracts/mqtt/detection.schema.json",
+  "title": "MQTT Detection Message",
+  "description": "Topic: smart-media/{device_id}/detection. Published by XIAO ESP32S3 Sense. QoS 0, retain=false. Face presence only; PLAY/PAUSE is decided by the Control Gateway. Mock and real providers share this contract. Scores (confidence, threshold) use the model's raw face score scale 0..1 (Edge Impulse bounding box 'value').",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "device_id",
+    "seq",
+    "uptime_ms",
+    "source",
+    "model_id",
+    "raw_face_detected"
+  ],
+  "properties": {
+    "schema_version": {
+      "type": "string",
+      "const": "1.0"
+    },
+    "device_id": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Must match {device_id} in the topic."
+    },
+    "seq": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Incremented on every publish. Resets on device reboot."
+    },
+    "uptime_ms": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Device millis() at publish time."
+    },
+    "source": {
+      "type": "string",
+      "enum": ["mock", "edge_impulse"],
+      "description": "Detection provider. 'mock' = alternating true/false without camera/model."
+    },
+    "model_id": {
+      "type": "string",
+      "minLength": 1,
+      "description": "'mock-v1' for the mock provider, Edge Impulse model id for real models."
+    },
+    "raw_face_detected": {
+      "type": "boolean",
+      "description": "Whether a face is present in the frame, as decided on the device. With a threshold: raw_face_detected == (confidence >= threshold)."
+    },
+    "confidence": {
+      "type": ["number", "null"],
+      "minimum": 0,
+      "maximum": 1,
+      "description": "Highest face score the model output for this frame (0..1), sent even when no face is detected or the score is below threshold. 0 when the model produced no valid face score. Required (number) for edge_impulse; null or omitted for mock."
+    },
+    "threshold": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1,
+      "description": "Optional. Threshold (same 0..1 scale as confidence) the device used to decide raw_face_detected. Not sent by the mock provider."
+    },
+    "inference_ms": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Optional. Real model only. MUST NOT be sent by the mock provider."
+    },
+    "bbox": {
+      "type": "object",
+      "description": "Optional. Real model only, and only when raw_face_detected is true. Normalized (0..1) bounding box of the highest-score face.",
+      "required": ["x", "y", "w", "h"],
+      "properties": {
+        "x": { "type": "number", "minimum": 0, "maximum": 1 },
+        "y": { "type": "number", "minimum": 0, "maximum": 1 },
+        "w": { "type": "number", "minimum": 0, "maximum": 1 },
+        "h": { "type": "number", "minimum": 0, "maximum": 1 }
+      },
+      "additionalProperties": false
+    }
+  },
+  "allOf": [
+    {
+      "if": { "properties": { "source": { "const": "edge_impulse" } }, "required": ["source"] },
+      "then": {
+        "required": ["confidence"],
+        "properties": { "confidence": { "type": "number" } }
+      }
+    },
+    {
+      "if": { "properties": { "source": { "const": "mock" } }, "required": ["source"] },
+      "then": {
+        "properties": {
+          "confidence": { "type": "null" },
+          "threshold": false,
+          "inference_ms": false,
+          "bbox": false
+        }
+      }
+    },
+    {
+      "if": { "properties": { "raw_face_detected": { "const": false } }, "required": ["raw_face_detected"] },
+      "then": { "properties": { "bbox": false } }
+    }
+  ],
+  "additionalProperties": false,
+  "examples": [
+    {
+      "schema_version": "1.0",
+      "device_id": "xiao-01",
+      "seq": 1,
+      "uptime_ms": 10000,
+      "source": "mock",
+      "model_id": "mock-v1",
+      "raw_face_detected": true
+    },
+    {
+      "schema_version": "1.0",
+      "device_id": "xiao-01",
+      "seq": 2,
+      "uptime_ms": 20000,
+      "source": "mock",
+      "model_id": "mock-v1",
+      "raw_face_detected": false
+    },
+    {
+      "schema_version": "1.0",
+      "device_id": "xiao-01",
+      "seq": 3,
+      "uptime_ms": 23100,
+      "source": "edge_impulse",
+      "model_id": "ei-541658-fomo01-int8",
+      "raw_face_detected": true,
+      "confidence": 0.84,
+      "threshold": 0.6,
+      "inference_ms": 2300,
+      "bbox": { "x": 0.4167, "y": 0.4167, "w": 0.0833, "h": 0.0833 }
+    },
+    {
+      "schema_version": "1.0",
+      "device_id": "xiao-01",
+      "seq": 4,
+      "uptime_ms": 25400,
+      "source": "edge_impulse",
+      "model_id": "ei-541658-fomo01-int8",
+      "raw_face_detected": false,
+      "confidence": 0.35,
+      "threshold": 0.6,
+      "inference_ms": 2300
+    },
+    {
+      "schema_version": "1.0",
+      "device_id": "xiao-01",
+      "seq": 5,
+      "uptime_ms": 27700,
+      "source": "edge_impulse",
+      "model_id": "ei-541658-fomo01-int8",
+      "raw_face_detected": false,
+      "confidence": 0,
+      "inference_ms": 2300
+    }
+  ]
+}
