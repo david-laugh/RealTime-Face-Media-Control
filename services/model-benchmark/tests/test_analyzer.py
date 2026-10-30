@@ -77,3 +77,34 @@ def test_collector_strips_non_schema_fields():
     assert r["valid"] is False and "image" not in r["payload"] and "state" not in r["payload"]
     r = build_record("smart-media/d1/detection", b"not json", {})
     assert r["payload"] is None and r["valid"] is False
+
+
+def test_hold_simulation():
+    frames = [(0, .9), (2000, .3), (4000, .3), (6000, .9), (8000, .3)]
+    # hold 2.5s: 4000ms 에서 PAUSE (재생 0~2500), 6000ms 재검출 → 8000 까지 재생
+    assert analyzer.hold_simulation(frames, .5, 2500) == (2, 1, 4500, 8000)
+    # hold 5s: 검출 공백 6s > 5s → 5000ms 에 PAUSE, 6000ms 재생
+    assert analyzer.hold_simulation(frames, .5, 5000) == (2, 1, 7000, 8000)
+    # hold 7.5s: 끊김 없이 유지
+    assert analyzer.hold_simulation(frames, .5, 7500) == (1, 0, 8000, 8000)
+    # t 가 높으면 검출 없음 → PLAY 없음
+    assert analyzer.hold_simulation(frames, .95, 2500) == (0, 0, 0, 8000)
+    assert analyzer.hold_simulation([], .5, 2500) == (0, 0, 0, 0)
+
+
+def test_hold_rows_face_noface():
+    hold = []
+    face = analyzer.load_sessions(FIXTURES / "edge_impulse_session")
+    noface = [({**meta("NO_FACE", False)}, records([mock_det(0, True)], label="NO_FACE"))]
+    analyzer.aggregate([*face, *noface], hold)
+    assert len(hold) == 2 * len(analyzer.HOLD_COMBOS)
+    r = next(h for h in hold if h["label"] == "FACE" and h["t"] == 0.6 and h["hold_s"] == 2.5)
+    assert r["wrong_pause"] == 0 and r["play_ratio"] == 1.0 and r["wrong_play"] is None
+    assert r["pause_latency_s_est"] == 2.5
+    n = next(h for h in hold if h["label"] == "NO_FACE")
+    assert n["wrong_play"] is None  # mock 은 confidence 없음 → 계산 불가
+
+
+def test_distance_sorted_numerically():
+    sessions = [({**meta(), "distance": d}, records([mock_det(0, True)])) for d in ("120cm", "-", "50cm", "80cm")]
+    assert [r["distance"] for r in analyzer.aggregate(sessions)] == ["50cm", "80cm", "120cm", "-"]
