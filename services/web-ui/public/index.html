@@ -27,6 +27,18 @@ h1 small{display:block;font-size:15px;font-weight:500;color:var(--soft);letter-s
 .conn i{width:8px;height:8px;border-radius:50%;background:var(--idle)}
 .conn.on{color:var(--navy)} .conn.on i{background:var(--navy);box-shadow:0 0 0 4px var(--navy-tint)}
 .conn.off{color:var(--red)} .conn.off i{background:var(--red)}
+.badges{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.privacy{display:inline-flex;align-items:center;gap:7px;padding:8px 14px;border-radius:999px;background:var(--navy-tint);
+  color:var(--navy);font-size:13px;font-weight:600}
+.privacy svg{width:14px;height:14px;flex:none}
+#events{list-style:none;margin:0;padding:0;font-size:13px;font-variant-numeric:tabular-nums}
+#events li{display:grid;grid-template-columns:auto auto 1fr;gap:8px;align-items:baseline;padding:6px 0}
+#events li+li{border-top:1px solid var(--rule)}
+#events time{color:var(--soft)}
+#events .cmd{font-weight:700} #events .cmd.play{color:var(--navy)} #events .cmd.pause{color:var(--red)}
+#events .lat{color:var(--soft);font-size:12px;margin-left:6px}
+#events .empty{color:var(--soft);display:block}
+.card h2{margin:0 0 8px;font-size:14px;font-weight:700}
 
 .grid{display:grid;grid-template-columns:minmax(0,1fr) 320px;gap:22px;align-items:start}
 @media (max-width:900px){.grid{grid-template-columns:1fr}}
@@ -65,9 +77,10 @@ aside{display:flex;flex-direction:column;gap:14px}
 .watch #label{color:var(--navy)} .lost #label{color:var(--red)}
 #meta{font-size:13px;color:var(--soft);margin-top:3px}
 
-.stats{display:grid;grid-template-columns:1fr 1fr 1fr;padding:6px 0}
+.stats{display:grid;grid-template-columns:1fr 1fr;padding:6px 0}
 .stat{padding:12px 14px}
-.stat+.stat{border-left:1px solid var(--rule)}
+.stat:nth-child(even){border-left:1px solid var(--rule)}
+.stat:nth-child(n+3){border-top:1px solid var(--rule)}
 .stat b{display:block;font-size:24px;font-weight:800;letter-spacing:-.02em;font-variant-numeric:tabular-nums;line-height:1.2}
 .stat span{font-size:12px;color:var(--soft)}
 
@@ -91,7 +104,10 @@ summary{cursor:pointer;font-weight:600;width:max-content}
 
 <header>
   <h1>Zero-Touch 미디어<small>화면을 보면 재생되고, 자리를 비우면 멈춥니다.</small></h1>
-  <div class="conn" id="conn"><i></i><span id="connText">게이트웨이 연결 중</span></div>
+  <div class="badges">
+    <div class="privacy"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="7" width="10" height="7" rx="1.5"/><path d="M5.5 7V5a2.5 2.5 0 0 1 5 0v2"/></svg>카메라 영상은 기기 안에서만 처리되며 저장·전송되지 않습니다</div>
+    <div class="conn" id="conn"><i></i><span id="connText">게이트웨이 연결 중</span></div>
+  </div>
 </header>
 
 <div class="grid">
@@ -119,9 +135,15 @@ summary{cursor:pointer;font-weight:600;width:max-content}
     </div>
 
     <div class="card stats">
-      <div class="stat"><b id="sWatch">0:00</b><span>시청 시간</span></div>
+      <div class="stat"><b id="sWatch">0:00</b><span>재생 시간</span></div>
+      <div class="stat"><b id="sAway">0:00</b><span>자리 비운 시간</span></div>
       <div class="stat"><b id="sPause">0</b><span>자동 정지</span></div>
       <div class="stat"><b id="sConf">-</b><span>신뢰도</span></div>
+    </div>
+
+    <div class="card">
+      <h2>최근 이벤트</h2>
+      <ol id="events"><li class="empty">아직 받은 명령이 없습니다.</li></ol>
     </div>
 
     <div class="card">
@@ -163,15 +185,23 @@ const REASON = {
   UNKNOWN:            { kind: "none",  label: "판단 불가",    meta: "상태를 알 수 없어 멈췄습니다." },
 };
 
-const FACE_FRONT = '<svg viewBox="0 0 40 40" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><circle cx="20" cy="18" r="11"/><circle cx="16" cy="17" r="1.3" fill="currentColor" stroke="none"/><circle cx="24" cy="17" r="1.3" fill="currentColor" stroke="none"/><path d="M16 22.5q4 3 8 0"/><path d="M9 37q11-8 22 0"/></svg>';
+// 게이트웨이 detail (세부 원인) 한국어 표시
+const DETAIL = {
+  FACE_PRESENT: "얼굴 감지", FACE_ABSENT: "얼굴 없음", DEVICE_TIMEOUT: "기기 응답 없음",
+  DEVICE_OFFLINE: "기기 오프라인", BROKER_DISCONNECTED: "브로커 연결 끊김", SYSTEM_STARTUP: "게이트웨이 시작",
+};
+const DEVICE_LOST = new Set(["DEVICE_TIMEOUT", "DEVICE_OFFLINE"]);
+const EVENT_MAX = 10;
+
+const FACE_FRONT ='<svg viewBox="0 0 40 40" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><circle cx="20" cy="18" r="11"/><circle cx="16" cy="17" r="1.3" fill="currentColor" stroke="none"/><circle cx="24" cy="17" r="1.3" fill="currentColor" stroke="none"/><path d="M16 22.5q4 3 8 0"/><path d="M9 37q11-8 22 0"/></svg>';
 const FACE_SIDE = '<svg viewBox="0 0 40 40" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M14 30V26a11 11 0 1 1 13-14l3 6-3 1v4a3 3 0 0 1-3 3h-3v4"/><path d="M8 37q8-5 16-2"/></svg>';
 const FACE_NONE = '<svg viewBox="0 0 40 40" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-dasharray="3 4"><circle cx="20" cy="18" r="11"/><path d="M9 37q11-8 22 0"/></svg>';
 
 let player, ready = false, started = false;
 let pending = null;            // 시작 전에 받은 마지막 명령
 let current = "none";          // 타임라인용 현재 상태
-let watchSec = 0, pauses = 0, lastTick = performance.now();
-let simTimer = null, simValue = null;
+let watchSec = 0, awaySec = 0, pauses = 0, lastTick = performance.now();
+let simTimer = null, simValue = null, lastSimCmd = null;
 const samples = [];
 const $ = id => document.getElementById(id);
 const log = m => { const d = document.createElement("div"); d.textContent = new Date().toLocaleTimeString() + "  " + m; $("log").prepend(d); };
@@ -213,6 +243,23 @@ function show(kind, label, meta){
 }
 function conn(kind, text){ $("conn").className = "conn " + kind; $("connText").textContent = text; }
 
+/* ---------- 최근 이벤트 (최대 10개, 최신이 위) ---------- */
+function addEvent(m, delay, source){
+  const list = $("events"), empty = list.querySelector(".empty");
+  if (empty) empty.remove();
+  const li = document.createElement("li");
+  const t = document.createElement("time"); t.textContent = new Date().toLocaleTimeString();
+  const cmd = document.createElement("span");
+  cmd.className = "cmd " + (m.command === "PLAY" ? "play" : "pause");
+  cmd.textContent = m.command === "PLAY" ? "재생" : "정지";
+  const why = document.createElement("span");
+  why.textContent = (DETAIL[m.detail] || (REASON[m.reason] || REASON.UNKNOWN).label) + (source === "sim" ? " (시험)" : "");
+  if (delay !== null) { const lat = document.createElement("span"); lat.className = "lat"; lat.textContent = `전달 ${delay}ms`; why.append(lat); }
+  li.append(t, cmd, why);
+  list.prepend(li);
+  while (list.children.length > EVENT_MAX) list.lastElementChild.remove();
+}
+
 /* ---------- 명령 처리 ---------- */
 function valid(m){
   return m && m.type === "media_control" && (m.command === "PLAY" || m.command === "PAUSE")
@@ -223,6 +270,11 @@ function apply(m, source){
   current = m.command === "PLAY" ? "watch" : r.kind === "watch" ? "away" : r.kind;
   const delay = source === "ws" && Number.isInteger(m.ts_server_ms) ? Math.max(0, Date.now() - m.ts_server_ms) : null;
   show(current, r.label, `${r.meta} ${m.device_id}${delay !== null ? `, 전달 ${delay}ms` : ""}`);
+  if (source === "ws") addEvent(m, delay, source);
+  else if (source === "sim" && m.command !== lastSimCmd) { lastSimCmd = m.command; addEvent(m, null, source); }
+  if (source === "ws" && ws && ws.readyState === WebSocket.OPEN) {
+    if (DEVICE_LOST.has(m.detail)) conn("off", "기기 끊김"); else conn("on", "게이트웨이 연결됨");
+  }
   $("sConf").textContent = typeof m.confidence === "number" ? Math.round(m.confidence * 100) + "%" : "-";
   if (!ready || !started) { pending = m; return; }
   const st = player.getPlayerState();
@@ -259,7 +311,7 @@ function connect(){
 
 /* ---------- 게이트웨이 없이 시험하기 (화면 안에서만 동작) ---------- */
 document.querySelectorAll(".seg .btn").forEach(b => b.onclick = () => {
-  clearInterval(simTimer); simTimer = null;
+  clearInterval(simTimer); simTimer = null; lastSimCmd = null;
   document.querySelectorAll(".seg .btn").forEach(x => x.setAttribute("aria-pressed", "false"));
   if (simValue === b.dataset.v) { simValue = null; log("시험 모드 끔"); return; }
   simValue = b.dataset.v; b.setAttribute("aria-pressed", "true");
@@ -290,9 +342,12 @@ function drawRibbon(){
 function tick(){
   const now = performance.now(), dt = (now - lastTick) / 1000; lastTick = now;
   if (ready && started && player.getPlayerState() === YT.PlayerState.PLAYING) watchSec += dt;
+  if (started && current === "away") awaySec += dt;
   samples.push([now, current]);
   while (samples.length && now - samples[0][0] > RIBBON_SEC * 1000 + 1000) samples.shift();
-  $("sWatch").textContent = Math.floor(watchSec / 60) + ":" + String(Math.floor(watchSec % 60)).padStart(2, "0");
+  const mmss = s => Math.floor(s / 60) + ":" + String(Math.floor(s % 60)).padStart(2, "0");
+  $("sWatch").textContent = mmss(watchSec);
+  $("sAway").textContent = mmss(awaySec);
   $("sPause").textContent = pauses;
   drawRibbon();
 }
