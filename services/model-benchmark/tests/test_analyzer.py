@@ -108,3 +108,14 @@ def test_hold_rows_face_noface():
 def test_distance_sorted_numerically():
     sessions = [({**meta(), "distance": d}, records([mock_det(0, True)])) for d in ("120cm", "-", "50cm", "80cm")]
     assert [r["distance"] for r in analyzer.aggregate(sessions)] == ["50cm", "80cm", "120cm", "-"]
+
+
+def test_env_grouping_and_legacy_default(tmp_path):
+    legacy = (meta(), records([mock_det(0, True)]))                       # board_pkg 없음
+    new = ({**meta(), "board_pkg": "2.0.17", "esp_nn": "on"}, records([mock_det(0, False)]))
+    rows = analyzer.aggregate([legacy, new])
+    assert [(r["board_pkg"], r["esp_nn"], r["face_rate"]) for r in rows] == [("2.0.17", "on", 0.0), ("3.3.12", "off", 1.0)]
+    assert "board_pkg" not in legacy[0]                                     # 원본 meta 는 그대로
+    analyzer.write_reports(rows, [legacy[0], new[0]], tmp_path)
+    md = (tmp_path / "summary.md").read_text(encoding="utf-8")
+    assert "# 환경: esp32 2.0.17 / ESP-NN on" in md and "# 환경: esp32 3.3.12 / ESP-NN off" in md

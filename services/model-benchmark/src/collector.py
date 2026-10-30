@@ -113,6 +113,7 @@ def main():
     p.add_argument("--operator", default="", help="측정자 이니셜/별칭 (실명 금지)")
     p.add_argument("--deploy", default="int8+EON", help="배포 옵션, 예: int8+EON, int8")
     p.add_argument("--esp-nn", default="off", choices=["on", "off"])
+    p.add_argument("--board-pkg", help="Arduino esp32 보드 패키지 버전, 예: 2.0.17 (미지정 시 analyzer 가 3.3.12 로 간주)")
     p.add_argument("--color", default="grayscale", choices=["grayscale", "rgb"])
     p.add_argument("--device-threshold", type=float, default=0.2,
                    help="기기 FOMO 출력 임계값 (model_variables.h, 원래 0.6 → 스윕용 0.2)")
@@ -125,6 +126,8 @@ def main():
     args = p.parse_args()
 
     case = resolve_case(args)
+    if not args.board_pkg:
+        print("[collector] 경고: --board-pkg 미지정 → analyzer 가 esp32 3.3.12 로 간주합니다")
     now = datetime.now()
     session_id = f"{now:%H%M%S}_{case['label']}_{case['position']}_{case['distance']}_{case['env']}".replace("/", "-")
     out_dir = args.results_dir / args.model_id / f"{now:%Y%m%d}" / session_id
@@ -135,7 +138,7 @@ def main():
         "case_id": case["case_id"], "label": case["label"], "position": case["position"],
         "distance": case["distance"], "env": case["env"], "expected_face": case["expected_face"], "duration_s": case["duration_s"],
         "operator": args.operator, "start_delay_s": args.start_delay,
-        "deploy": args.deploy, "esp_nn": args.esp_nn, "color": args.color,
+        "deploy": args.deploy, "board_pkg": args.board_pkg, "esp_nn": args.esp_nn, "color": args.color,
         "device_threshold": args.device_threshold, "bridge_threshold": args.bridge_threshold,
         "download_date": args.download_date, "lighting": args.lighting,
         "camera_height": args.camera_height, "camera_position": args.camera_position,

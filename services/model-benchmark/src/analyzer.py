@@ -18,7 +18,9 @@ DEBOUNCE_FRAMES = [1, 2, 3, 4, 5]
 HOLD_THRESHOLDS = [0.4, 0.5, 0.6]
 HOLD_SECONDS = [2.5, 5, 7.5, 10]
 HOLD_COMBOS = [(t, h) for t in HOLD_THRESHOLDS for h in HOLD_SECONDS]
-META_COLUMNS = ["session_id", "label", "position", "distance", "env", "operator", "started_at", "deploy",
+# board_pkg / esp_nn 필드가 생기기 전 세션의 실제 환경 (meta.json 은 수정하지 않고 읽을 때 간주)
+LEGACY_BOARD_PKG, LEGACY_ESP_NN = "3.3.12", "off"
+META_COLUMNS = ["session_id", "label", "position", "distance", "env", "operator", "started_at", "board_pkg", "deploy",
                 "esp_nn", "color", "device_threshold", "bridge_threshold", "download_date", "lighting", "camera_height", "camera_position", "notes"]
 
 
@@ -107,6 +109,12 @@ def load_sessions(root: Path):
         yield meta, records
 
 
+def with_env(meta: dict) -> dict:
+    """board_pkg / esp_nn 이 없는 예전 세션은 3.3.12 / off 로 간주한 사본 (원본 dict 는 그대로)."""
+    return {**meta, "board_pkg": meta.get("board_pkg") or LEGACY_BOARD_PKG,
+            "esp_nn": meta.get("esp_nn") or LEGACY_ESP_NN}
+
+
 def session_metrics(meta, records):
     dets_by_dev, tels = defaultdict(list), []
     invalid = 0
@@ -151,14 +159,15 @@ def aggregate(sessions, hold_out: list | None = None):
     """그룹별 지표 행 반환. hold_out 을 주면 비대칭 debounce 시뮬레이션 행을 채운다."""
     groups = defaultdict(list)
     for meta, records in sessions:
-        key = (meta.get("model_id"), meta["label"], meta.get("position", "CENTER"), meta["distance"],
-               meta["env"], meta.get("expected_face"))
+        meta = with_env(meta)
+        key = (meta.get("model_id"), meta["board_pkg"], meta["esp_nn"], meta["label"],
+               meta.get("position", "CENTER"), meta["distance"], meta["env"], meta.get("expected_face"))
         groups[key].append(session_metrics(meta, records))
 
     rows, hold_rows = [], []
-    for (model_id, label, position, distance, env, expected), ms in sorted(
-            groups.items(), key=lambda kv: (str(kv[0][0]), str(kv[0][1]), str(kv[0][2]),
-                                            distance_key(kv[0][3]), str(kv[0][4]))):
+    for (model_id, board_pkg, esp_nn, label, position, distance, env, expected), ms in sorted(
+            groups.items(), key=lambda kv: (*map(str, kv[0][:5]), distance_key(kv[0][5]), str(kv[0][6]))):
+        env_cols = {"board_pkg": board_pkg, "esp_nn": esp_nn}
         faces = [f for m in ms for f in m["faces"]]
         confs = [c for m in ms for c in m["confs"]]
         inf = [x for m in ms for x in m["inference_ms"]]
@@ -167,7 +176,7 @@ def aggregate(sessions, hold_out: list | None = None):
         recv, exp = sum(m["seq_received"] for m in ms), sum(m["seq_expected"] for m in ms)
         n = len(faces)
         row = {
-            "model_id": model_id, "label": label, "position": position, "distance": distance, "env": env,
+            "model_id": model_id, **env_cols, "label": label, "position": position, "distance": distance, "env": env,
             "expected_face": expected, "metric": "detection_rate" if expected else "false_positive_rate",
             "sessions": len(ms), "frames": n, "invalid_msgs": sum(m["invalid"] for m in ms),
             "face_rate": sum(faces) / n if n else None,
@@ -188,7 +197,7 @@ def aggregate(sessions, hold_out: list | None = None):
         for t, hold_s in HOLD_COMBOS:
             plays, pauses, play_ms, span_ms = (sum(m["hold"][(t, hold_s)][i] for m in ms) for i in range(4))
             hold_rows.append({
-                "label": label, "position": position, "distance": distance, "env": env,
+                **env_cols, "label": label, "position": position, "distance": distance, "env": env,
                 "expected_face": expected, "t": t, "hold_s": hold_s,
                 "wrong_pause": pauses if expected and has_conf else None,
                 "play_ratio": play_ms / span_ms if has_conf and span_ms else None,
@@ -227,13 +236,26 @@ def write_reports(rows, metas, out_dir: Path, hold_rows=()):
     out_dir.mkdir(parents=True, exist_ok=True)
     write_csv(out_dir / "summary.csv", rows)
     write_csv(out_dir / "hold_simulation.csv", list(hold_rows))
+    parts = [
+        "# Model Benchmark Summary", "",
+        "판정 기준: `raw_face_detected`. FACE 계열은 검출률, NO_FACE 계열은 오탐률.",
+        f"board_pkg / esp_nn 이 기록되지 않은 세션은 {LEGACY_BOARD_PKG} / {LEGACY_ESP_NN} 으로 간주.", "",
+        "## 측정 조건", "", md_table(META_COLUMNS, [with_env(m) for m in metas]), "",
+    ]
+    envs = sorted({(r["board_pkg"], r["esp_nn"]) for r in rows})
+    for board_pkg, esp_nn in envs:
+        def same(r):
+            return (r["board_pkg"], r["esp_nn"]) == (board_pkg, esp_nn)
+        parts += [f"# 환경: esp32 {board_pkg} / ESP-NN {esp_nn}", "",
+                  *env_sections([r for r in rows if same(r)], [r for r in hold_rows if same(r)])]
+    (out_dir / "summary.md").write_text("\n".join(parts), encoding="utf-8")
+
+
+def env_sections(rows, hold_rows):
     face_hold = [r for r in hold_rows if r["expected_face"]]
     noface_hold = [r for r in hold_rows if not r["expected_face"]]
     key = ["label", "position", "distance", "env"]
-    parts = [
-        "# Model Benchmark Summary", "",
-        "판정 기준: `raw_face_detected`. FACE 계열은 검출률, NO_FACE 계열은 오탐률.", "",
-        "## 측정 조건", "", md_table(META_COLUMNS, metas), "",
+    return [
         "## 검출률 / 오탐률", "",
         md_table(["model_id", *key, "metric", "sessions", "frames", "invalid_msgs", "face_rate"], rows), "",
         "## confidence 임계값별 비율 (저장된 confidence ≥ t, raw_face_detected 와 무관)", "",
@@ -256,7 +278,6 @@ def write_reports(rows, metas, out_dir: Path, hold_rows=()):
         "### NO_FACE 계열 세션 (빈 화면, 측면 등): 잘못된 PLAY 횟수, 재생 상태 시간 비율", "",
         md_table([*key, "t", "hold_s", "wrong_play", "play_ratio", "pause_latency_s_est"], noface_hold), "",
     ]
-    (out_dir / "summary.md").write_text("\n".join(parts), encoding="utf-8")
 
 
 def main():
