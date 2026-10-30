@@ -1,13 +1,28 @@
 # bench-sketch
 
-Edge Impulse 프로젝트 541658(FOMO, int8) Arduino 라이브러리의 예제 스케치로 측정합니다.
-라이브러리와 생성된 스케치는 커밋하지 않습니다 (`.gitignore`).
+Edge Impulse 프로젝트 541658(FOMO, int8, Grayscale) Arduino 라이브러리의 `esp32_camera` 예제를 수정해 측정합니다.
+Edge Impulse 라이브러리는 커밋하지 않습니다 (`.gitignore`). 수정한 `.ino`는 이 폴더에 둡니다.
 
 1. Edge Impulse Studio → Deployment → Arduino library (Quantized int8, EON 여부 기록) 다운로드
 2. Arduino IDE → Sketch → Include Library → Add .ZIP Library
-3. File → Examples → `<project>_inferencing` → `esp32` → `esp32_camera`를 이 폴더에 복사해 사용
-4. 보드: XIAO_ESP32S3, PSRAM: OPI PSRAM 활성화
-5. 다운로드 날짜와 배포 옵션을 collector `--download-date`, `--deploy` 로 기록
+3. 보드: XIAO_ESP32S3, PSRAM: OPI PSRAM 활성화, Serial 115200 baud
+4. 다운로드 날짜와 배포 옵션을 collector `--download-date`, `--deploy` 로 기록
+
+## 원본 예제 대비 변경사항
+
+| 항목 | 변경 | 이유 |
+|------|------|------|
+| 카메라 핀 | XIAO ESP32S3 Sense 핀맵 추가 (아래 표) | 원본 예제는 ESP-EYE / AI-Thinker 핀만 정의 |
+| `ei_camera_get_data()` 색상 순서 | BGR→RGB 스왑 제거: `(snapshot_buf[pixel_ix] << 16) + (snapshot_buf[pixel_ix + 1] << 8) + snapshot_buf[pixel_ix + 2]` | 최신 esp32-camera 드라이버는 이미 RGB 순서로 변환하므로 원본의 스왑이 색을 다시 뒤집어 검출이 실패함 |
+| ESP-NN | off | 측정 조건 고정 (collector `--esp-nn off` 기록) |
+| 검출 출력 임계값 | 0.2 | 낮은 confidence 박스도 출력해 analyzer 에서 임계값 스윕. 실제 판정 임계값은 serial_bridge `--threshold`(기본 0.5) |
+| `debug_nn` | `false` 고정 | 아래 개인정보 보호 참고 |
+
+카메라 핀 (Seeed XIAO ESP32S3 Sense 공식 핀맵 기준, 스케치 값과 다르면 이 표를 수정):
+
+| PWDN | RESET | XCLK | SIOD | SIOC | Y9 | Y8 | Y7 | Y6 | Y5 | Y4 | Y3 | Y2 | VSYNC | HREF | PCLK |
+|------|-------|------|------|------|----|----|----|----|----|----|----|----|-------|------|------|
+| -1 | -1 | 10 | 40 | 39 | 48 | 11 | 12 | 14 | 16 | 18 | 17 | 15 | 38 | 47 | 13 |
 
 ## 반드시 지킬 것 (개인정보 보호)
 
