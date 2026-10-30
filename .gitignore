@@ -1,0 +1,28 @@
+# Environment
+.env
+
+# Build outputs
+build/
+dist/
+
+# Node
+node_modules/
+
+# Python
+__pycache__/
+*.pyc
+
+# IDE / OS
+.vscode/
+.idea/
+.DS_Store
+
+# Edge Impulse model artifacts (keep directory placeholder only)
+firmware/xiao-esp32s3-sense/models/*
+!firmware/xiao-esp32s3-sense/models/.gitkeep
+
+# Mosquitto runtime data / logs (keep directory placeholders only)
+services/mqtt-broker/data/*
+!services/mqtt-broker/data/.gitkeep
+services/mqtt-broker/log/*
+!services/mqtt-broker/log/.gitkeep

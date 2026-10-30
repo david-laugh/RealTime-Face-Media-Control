@@ -1,0 +1,53 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://smart-youtube-face-control/contracts/websocket/media-control.schema.json",
+  "title": "WebSocket Media Control Message",
+  "description": "Control Gateway -> Browser (Web UI). Instructs the YouTube IFrame Player to PLAY or PAUSE.",
+  "type": "object",
+  "required": [
+    "type",
+    "device_id",
+    "command",
+    "reason",
+    "ts_server_ms"
+  ],
+  "properties": {
+    "type": {
+      "type": "string",
+      "const": "media_control"
+    },
+    "device_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "command": {
+      "type": "string",
+      "enum": ["PLAY", "PAUSE"]
+    },
+    "reason": {
+      "type": "string",
+      "enum": ["FRONT_FACE_PRESENT", "FACE_ABSENT", "DEVICE_TIMEOUT", "UNKNOWN"]
+    },
+    "confidence": {
+      "type": ["number", "null"],
+      "minimum": 0,
+      "maximum": 1
+    },
+    "ts_server_ms": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Gateway server Unix epoch time in milliseconds."
+    }
+  },
+  "additionalProperties": false,
+  "examples": [
+    {
+      "type": "media_control",
+      "device_id": "xiao-01",
+      "command": "PLAY",
+      "reason": "FRONT_FACE_PRESENT",
+      "confidence": 0.84,
+      "ts_server_ms": 1793320123456
+    }
+  ]
+}

@@ -1,0 +1,89 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://smart-youtube-face-control/contracts/mqtt/detection.schema.json",
+  "title": "MQTT Detection Message",
+  "description": "Topic: smart-media/{device_id}/detection. Published by XIAO ESP32S3 Sense after each inference.",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "device_id",
+    "seq",
+    "uptime_ms",
+    "model_id",
+    "raw_face_detected",
+    "confidence",
+    "inference_ms",
+    "state"
+  ],
+  "properties": {
+    "schema_version": {
+      "type": "string",
+      "const": "1.0"
+    },
+    "device_id": {
+      "type": "string",
+      "description": "Device identifier. Must match {device_id} in the topic.",
+      "minLength": 1
+    },
+    "seq": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Monotonically increasing message sequence number."
+    },
+    "uptime_ms": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Device uptime in milliseconds."
+    },
+    "model_id": {
+      "type": "string",
+      "description": "Edge Impulse model identifier, e.g. ei-541658-fomo01-int8."
+    },
+    "raw_face_detected": {
+      "type": "boolean",
+      "description": "Raw model output before any state filtering."
+    },
+    "confidence": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1
+    },
+    "bbox": {
+      "type": ["object", "null"],
+      "description": "Normalized bounding box (0.0 - 1.0). null when no face is detected.",
+      "required": ["x", "y", "w", "h"],
+      "properties": {
+        "x": { "type": "number", "minimum": 0, "maximum": 1 },
+        "y": { "type": "number", "minimum": 0, "maximum": 1 },
+        "w": { "type": "number", "minimum": 0, "maximum": 1 },
+        "h": { "type": "number", "minimum": 0, "maximum": 1 }
+      },
+      "additionalProperties": false
+    },
+    "inference_ms": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "On-device inference time in milliseconds."
+    },
+    "state": {
+      "type": "string",
+      "enum": ["FRONT_PRESENT", "NOT_PRESENT", "UNKNOWN"],
+      "description": "Device-side presence state. Decision algorithm is TBD."
+    }
+  },
+  "additionalProperties": false,
+  "examples": [
+    {
+      "schema_version": "1.0",
+      "device_id": "xiao-01",
+      "seq": 152,
+      "uptime_ms": 124552,
+      "model_id": "ei-541658-fomo01-int8",
+      "raw_face_detected": true,
+      "confidence": 0.84,
+      "bbox": { "x": 0.32, "y": 0.18, "w": 0.35, "h": 0.51 },
+      "inference_ms": 731,
+      "state": "FRONT_PRESENT"
+    }
+  ]
+}

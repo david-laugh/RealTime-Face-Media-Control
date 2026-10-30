@@ -1,0 +1,81 @@
+# smart-youtube-face-control — Docker Compose skeleton
+#
+# NOTE: Containers below are skeletons only. No business logic is implemented.
+#   docker compose up                       -> mqtt-broker, control-gateway, web-ui
+#   docker compose --profile benchmark up   -> + model-benchmark
+#
+# The XIAO ESP32S3 Sense firmware is NOT a container (see firmware/).
+
+name: smart-youtube-face-control
+
+services:
+  mqtt-broker:
+    build:
+      context: ./services/mqtt-broker
+    container_name: mqtt-broker
+    ports:
+      - "${MQTT_PORT:-1883}:1883"
+      # - "${MQTT_WS_PORT:-9001}:9001"   # Reserved: MQTT over WebSocket
+    volumes:
+      - ./services/mqtt-broker/config/mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
+      - ./services/mqtt-broker/data:/mosquitto/data
+      - ./services/mqtt-broker/log:/mosquitto/log
+    networks:
+      - smart-media-network
+    restart: unless-stopped
+
+  control-gateway:
+    build:
+      context: ./services/control-gateway
+    container_name: control-gateway
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      MQTT_HOST: ${MQTT_HOST:-mqtt-broker}
+      MQTT_PORT: 1883
+      MQTT_TOPIC_PREFIX: ${MQTT_TOPIC_PREFIX:-smart-media}
+    ports:
+      - "${GATEWAY_PORT:-8000}:8000"
+    depends_on:
+      - mqtt-broker
+    networks:
+      - smart-media-network
+    restart: unless-stopped
+
+  web-ui:
+    build:
+      context: ./services/web-ui
+    container_name: web-ui
+    ports:
+      - "${WEB_UI_PORT:-8080}:80"
+    depends_on:
+      - control-gateway
+    networks:
+      - smart-media-network
+    restart: unless-stopped
+
+  model-benchmark:
+    build:
+      context: ./services/model-benchmark
+    container_name: model-benchmark
+    profiles:
+      - benchmark
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      MQTT_HOST: ${MQTT_HOST:-mqtt-broker}
+      MQTT_PORT: 1883
+    volumes:
+      - ./services/model-benchmark/results:/app/results
+      - ./services/model-benchmark/test-cases:/app/test-cases:ro
+    depends_on:
+      - mqtt-broker
+    networks:
+      - smart-media-network
+
+networks:
+  smart-media-network:
+    name: smart-media-network
+    driver: bridge

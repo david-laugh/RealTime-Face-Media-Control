@@ -1,0 +1,51 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://smart-youtube-face-control/contracts/mqtt/status.schema.json",
+  "title": "MQTT Device Status Message",
+  "description": "Topic: smart-media/{device_id}/status. Retained message. Intended to be used with MQTT Last Will (OFFLINE).",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "device_id",
+    "status"
+  ],
+  "properties": {
+    "schema_version": {
+      "type": "string",
+      "const": "1.0"
+    },
+    "device_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "status": {
+      "type": "string",
+      "enum": ["ONLINE", "OFFLINE"]
+    },
+    "uptime_ms": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "firmware_version": {
+      "type": "string"
+    },
+    "model_id": {
+      "type": "string"
+    },
+    "ip": {
+      "type": "string"
+    }
+  },
+  "additionalProperties": false,
+  "examples": [
+    {
+      "schema_version": "1.0",
+      "device_id": "xiao-01",
+      "status": "ONLINE",
+      "uptime_ms": 1200,
+      "firmware_version": "0.1.0",
+      "model_id": "ei-541658-fomo01-int8",
+      "ip": "192.168.0.42"
+    }
+  ]
+}
