@@ -10,6 +10,8 @@
 | 041701_FACE_CENTER_80cm_NORMAL | FACE | CENTER | 80cm | NORMAL | NY | 2026-10-30T04:17:11 | int8 | off | grayscale | 0.200 | 0.600 | 2026-10-30 |  | 40 | 모니터 상단 중앙 |  |
 | 041833_FACE_CENTER_120cm_NORMAL | FACE | CENTER | 120cm | NORMAL | NY | 2026-10-30T04:18:43 | int8 | off | grayscale | 0.200 | 0.600 | 2026-10-30 |  | 40 | 모니터 상단 중앙 |  |
 | 042011_NO_FACE_-_-_NORMAL | NO_FACE | - | - | NORMAL | NY | 2026-10-30T04:20:21 | int8 | off | grayscale | 0.200 | 0.600 | 2026-10-30 |  | 40 | 모니터 상단 중앙 |  |
+| 045053_LEFT_45_CENTER_50cm_NORMAL | LEFT_45 | CENTER | 50cm | NORMAL | NY | 2026-10-30T04:51:03 | int8+EON | off | grayscale | 0.200 | 0.600 | 2026-10-30 | 실내 천장등 | 40cm | 모니터 상단 중앙 |  |
+| 045227_RIGHT_45_CENTER_50cm_NORMAL | RIGHT_45 | CENTER | 50cm | NORMAL | NY | 2026-10-30T04:52:37 | int8+EON | off | grayscale | 0.200 | 0.600 | 2026-10-30 | 실내 천장등 | 40cm | 모니터 상단 중앙 |  |
 
 ## 검출률 / 오탐률
 
@@ -18,7 +20,9 @@
 | ei-541658-fomo01-int8 | FACE | CENTER | 50cm | NORMAL | detection_rate | 1 | 25 | 0 | 0.600 |
 | ei-541658-fomo01-int8 | FACE | CENTER | 80cm | NORMAL | detection_rate | 1 | 25 | 0 | 0.000 |
 | ei-541658-fomo01-int8 | FACE | CENTER | 120cm | NORMAL | detection_rate | 1 | 26 | 0 | 0.000 |
+| ei-541658-fomo01-int8 | LEFT_45 | CENTER | 50cm | NORMAL | false_positive_rate | 1 | 25 | 0 | 0.200 |
 | ei-541658-fomo01-int8 | NO_FACE | - | - | NORMAL | false_positive_rate | 1 | 25 | 0 | 0.000 |
+| ei-541658-fomo01-int8 | RIGHT_45 | CENTER | 50cm | NORMAL | false_positive_rate | 1 | 25 | 0 | 0.320 |
 
 ## confidence 임계값별 비율 (저장된 confidence ≥ t, raw_face_detected 와 무관)
 
@@ -29,7 +33,9 @@
 | FACE | CENTER | 50cm | NORMAL | 0.920 | 0.880 | 0.800 | 0.600 | 0.480 | 0.320 | 0.120 |
 | FACE | CENTER | 80cm | NORMAL | 0.000 | 0.000 | 0.000 | 0.000 | 0.000 | 0.000 | 0.000 |
 | FACE | CENTER | 120cm | NORMAL | 0.038 | 0.000 | 0.000 | 0.000 | 0.000 | 0.000 | 0.000 |
+| LEFT_45 | CENTER | 50cm | NORMAL | 0.720 | 0.600 | 0.320 | 0.200 | 0.040 | 0.040 | 0.000 |
 | NO_FACE | - | - | NORMAL | 0.000 | 0.000 | 0.000 | 0.000 | 0.000 | 0.000 | 0.000 |
+| RIGHT_45 | CENTER | 50cm | NORMAL | 0.760 | 0.480 | 0.400 | 0.320 | 0.160 | 0.000 | 0.000 |
 
 ## 성능 / 안정성
 
@@ -38,7 +44,9 @@
 | FACE | CENTER | 50cm | NORMAL | 2275.000 | 2275.000 | 2275.000 | 0.420 | 8 | 0.000 |
 | FACE | CENTER | 80cm | NORMAL | 2275.000 | 2275.000 | 2275.000 | 0.420 | 0 | 0.000 |
 | FACE | CENTER | 120cm | NORMAL | 2275.000 | 2275.000 | 2275.000 | 0.420 | 0 | 0.000 |
+| LEFT_45 | CENTER | 50cm | NORMAL | 2275.000 | 2275.000 | 2275.000 | 0.419 | 8 | 0.000 |
 | NO_FACE | - | - | NORMAL | 2275.000 | 2275.000 | 2275.000 | 0.420 | 0 | 0.000 |
+| RIGHT_45 | CENTER | 50cm | NORMAL | 2275.000 | 2275.000 | 2275.000 | 0.419 | 6 | 0.000 |
 
 ## Debounce 시뮬레이션 (N 프레임 연속 시 전환)
 
@@ -49,7 +57,9 @@
 | FACE | CENTER | 50cm | NORMAL | 8 | 0.000 | 6 | 2381.542 | 2 | 4763.083 | 2 | 7144.625 | 2 | 9526.167 |
 | FACE | CENTER | 80cm | NORMAL | 0 | 0.000 | 0 | 2378.917 | 0 | 4757.833 | 0 | 7136.750 | 0 | 9515.667 |
 | FACE | CENTER | 120cm | NORMAL | 0 | 0.000 | 0 | 2378.120 | 0 | 4756.240 | 0 | 7134.360 | 0 | 9512.480 |
+| LEFT_45 | CENTER | 50cm | NORMAL | 8 | 0.000 | 2 | 2384.167 | 0 | 4768.333 | 0 | 7152.500 | 0 | 9536.667 |
 | NO_FACE | - | - | NORMAL | 0 | 0.000 | 0 | 2377.583 | 0 | 4755.167 | 0 | 7132.750 | 0 | 9510.333 |
+| RIGHT_45 | CENTER | 50cm | NORMAL | 6 | 0.000 | 4 | 2384.708 | 2 | 4769.417 | 2 | 7154.125 | 2 | 9538.833 |
 
 ## 비대칭 Debounce 시뮬레이션 (추정)
 
@@ -99,19 +109,43 @@
 | FACE | CENTER | 120cm | NORMAL | 0.600 | 7.500 | 0 | 0.000 | 7.500 |
 | FACE | CENTER | 120cm | NORMAL | 0.600 | 10 | 0 | 0.000 | 10 |
 
-### NO_FACE 세션: 잘못된 PLAY
+### NO_FACE 계열 세션 (빈 화면, 측면 등): 잘못된 PLAY 횟수, 재생 상태 시간 비율
 
-| label | position | distance | env | t | hold_s | wrong_play | pause_latency_s_est |
-|---|---|---|---|---|---|---|---|
-| NO_FACE | - | - | NORMAL | 0.400 | 2.500 | 0 | 2.500 |
-| NO_FACE | - | - | NORMAL | 0.400 | 5 | 0 | 5 |
-| NO_FACE | - | - | NORMAL | 0.400 | 7.500 | 0 | 7.500 |
-| NO_FACE | - | - | NORMAL | 0.400 | 10 | 0 | 10 |
-| NO_FACE | - | - | NORMAL | 0.500 | 2.500 | 0 | 2.500 |
-| NO_FACE | - | - | NORMAL | 0.500 | 5 | 0 | 5 |
-| NO_FACE | - | - | NORMAL | 0.500 | 7.500 | 0 | 7.500 |
-| NO_FACE | - | - | NORMAL | 0.500 | 10 | 0 | 10 |
-| NO_FACE | - | - | NORMAL | 0.600 | 2.500 | 0 | 2.500 |
-| NO_FACE | - | - | NORMAL | 0.600 | 5 | 0 | 5 |
-| NO_FACE | - | - | NORMAL | 0.600 | 7.500 | 0 | 7.500 |
-| NO_FACE | - | - | NORMAL | 0.600 | 10 | 0 | 10 |
+| label | position | distance | env | t | hold_s | wrong_play | play_ratio | pause_latency_s_est |
+|---|---|---|---|---|---|---|---|---|
+| LEFT_45 | CENTER | 50cm | NORMAL | 0.400 | 2.500 | 4 | 0.589 | 2.500 |
+| LEFT_45 | CENTER | 50cm | NORMAL | 0.400 | 5 | 3 | 0.717 | 5 |
+| LEFT_45 | CENTER | 50cm | NORMAL | 0.400 | 7.500 | 2 | 0.798 | 7.500 |
+| LEFT_45 | CENTER | 50cm | NORMAL | 0.400 | 10 | 1 | 0.833 | 10 |
+| LEFT_45 | CENTER | 50cm | NORMAL | 0.500 | 2.500 | 2 | 0.338 | 2.500 |
+| LEFT_45 | CENTER | 50cm | NORMAL | 0.500 | 5 | 2 | 0.421 | 5 |
+| LEFT_45 | CENTER | 50cm | NORMAL | 0.500 | 7.500 | 2 | 0.465 | 7.500 |
+| LEFT_45 | CENTER | 50cm | NORMAL | 0.500 | 10 | 2 | 0.508 | 10 |
+| LEFT_45 | CENTER | 50cm | NORMAL | 0.600 | 2.500 | 4 | 0.217 | 2.500 |
+| LEFT_45 | CENTER | 50cm | NORMAL | 0.600 | 5 | 2 | 0.379 | 5 |
+| LEFT_45 | CENTER | 50cm | NORMAL | 0.600 | 7.500 | 2 | 0.423 | 7.500 |
+| LEFT_45 | CENTER | 50cm | NORMAL | 0.600 | 10 | 2 | 0.466 | 10 |
+| NO_FACE | - | - | NORMAL | 0.400 | 2.500 | 0 | 0.000 | 2.500 |
+| NO_FACE | - | - | NORMAL | 0.400 | 5 | 0 | 0.000 | 5 |
+| NO_FACE | - | - | NORMAL | 0.400 | 7.500 | 0 | 0.000 | 7.500 |
+| NO_FACE | - | - | NORMAL | 0.400 | 10 | 0 | 0.000 | 10 |
+| NO_FACE | - | - | NORMAL | 0.500 | 2.500 | 0 | 0.000 | 2.500 |
+| NO_FACE | - | - | NORMAL | 0.500 | 5 | 0 | 0.000 | 5 |
+| NO_FACE | - | - | NORMAL | 0.500 | 7.500 | 0 | 0.000 | 7.500 |
+| NO_FACE | - | - | NORMAL | 0.500 | 10 | 0 | 0.000 | 10 |
+| NO_FACE | - | - | NORMAL | 0.600 | 2.500 | 0 | 0.000 | 2.500 |
+| NO_FACE | - | - | NORMAL | 0.600 | 5 | 0 | 0.000 | 5 |
+| NO_FACE | - | - | NORMAL | 0.600 | 7.500 | 0 | 0.000 | 7.500 |
+| NO_FACE | - | - | NORMAL | 0.600 | 10 | 0 | 0.000 | 10 |
+| RIGHT_45 | CENTER | 50cm | NORMAL | 0.400 | 2.500 | 6 | 0.512 | 2.500 |
+| RIGHT_45 | CENTER | 50cm | NORMAL | 0.400 | 5 | 3 | 0.762 | 5 |
+| RIGHT_45 | CENTER | 50cm | NORMAL | 0.400 | 7.500 | 2 | 0.881 | 7.500 |
+| RIGHT_45 | CENTER | 50cm | NORMAL | 0.400 | 10 | 1 | 0.916 | 10 |
+| RIGHT_45 | CENTER | 50cm | NORMAL | 0.500 | 2.500 | 5 | 0.427 | 2.500 |
+| RIGHT_45 | CENTER | 50cm | NORMAL | 0.500 | 5 | 3 | 0.637 | 5 |
+| RIGHT_45 | CENTER | 50cm | NORMAL | 0.500 | 7.500 | 1 | 0.756 | 7.500 |
+| RIGHT_45 | CENTER | 50cm | NORMAL | 0.500 | 10 | 1 | 0.800 | 10 |
+| RIGHT_45 | CENTER | 50cm | NORMAL | 0.600 | 2.500 | 3 | 0.339 | 2.500 |
+| RIGHT_45 | CENTER | 50cm | NORMAL | 0.600 | 5 | 3 | 0.470 | 5 |
+| RIGHT_45 | CENTER | 50cm | NORMAL | 0.600 | 7.500 | 2 | 0.595 | 7.500 |
+| RIGHT_45 | CENTER | 50cm | NORMAL | 0.600 | 10 | 2 | 0.683 | 10 |
