@@ -1,17 +1,20 @@
 # Model Benchmark Summary
 
 판정 기준: `raw_face_detected`. FACE 계열은 검출률, NO_FACE 계열은 오탐률.
+board_pkg / esp_nn 이 기록되지 않은 세션은 3.3.12 / off 으로 간주.
 
 ## 측정 조건
 
-| session_id | label | position | distance | env | operator | started_at | deploy | esp_nn | color | device_threshold | bridge_threshold | download_date | lighting | camera_height | camera_position | notes |
-|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
-| 041413_FACE_CENTER_50cm_NORMAL | FACE | CENTER | 50cm | NORMAL | NY | 2026-10-30T04:14:23 | int8 | off | grayscale | 0.200 | 0.600 | 2026-10-30 |  | 40 | 모니터 상단 중앙 |  |
-| 041701_FACE_CENTER_80cm_NORMAL | FACE | CENTER | 80cm | NORMAL | NY | 2026-10-30T04:17:11 | int8 | off | grayscale | 0.200 | 0.600 | 2026-10-30 |  | 40 | 모니터 상단 중앙 |  |
-| 041833_FACE_CENTER_120cm_NORMAL | FACE | CENTER | 120cm | NORMAL | NY | 2026-10-30T04:18:43 | int8 | off | grayscale | 0.200 | 0.600 | 2026-10-30 |  | 40 | 모니터 상단 중앙 |  |
-| 042011_NO_FACE_-_-_NORMAL | NO_FACE | - | - | NORMAL | NY | 2026-10-30T04:20:21 | int8 | off | grayscale | 0.200 | 0.600 | 2026-10-30 |  | 40 | 모니터 상단 중앙 |  |
-| 045053_LEFT_45_CENTER_50cm_NORMAL | LEFT_45 | CENTER | 50cm | NORMAL | NY | 2026-10-30T04:51:03 | int8+EON | off | grayscale | 0.200 | 0.600 | 2026-10-30 | 실내 천장등 | 40cm | 모니터 상단 중앙 |  |
-| 045227_RIGHT_45_CENTER_50cm_NORMAL | RIGHT_45 | CENTER | 50cm | NORMAL | NY | 2026-10-30T04:52:37 | int8+EON | off | grayscale | 0.200 | 0.600 | 2026-10-30 | 실내 천장등 | 40cm | 모니터 상단 중앙 |  |
+| session_id | label | position | distance | env | operator | started_at | board_pkg | deploy | esp_nn | color | device_threshold | bridge_threshold | download_date | lighting | camera_height | camera_position | notes |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| 041413_FACE_CENTER_50cm_NORMAL | FACE | CENTER | 50cm | NORMAL | NY | 2026-10-30T04:14:23 | 3.3.12 | int8 | off | grayscale | 0.200 | 0.600 | 2026-10-30 |  | 40 | 모니터 상단 중앙 |  |
+| 041701_FACE_CENTER_80cm_NORMAL | FACE | CENTER | 80cm | NORMAL | NY | 2026-10-30T04:17:11 | 3.3.12 | int8 | off | grayscale | 0.200 | 0.600 | 2026-10-30 |  | 40 | 모니터 상단 중앙 |  |
+| 041833_FACE_CENTER_120cm_NORMAL | FACE | CENTER | 120cm | NORMAL | NY | 2026-10-30T04:18:43 | 3.3.12 | int8 | off | grayscale | 0.200 | 0.600 | 2026-10-30 |  | 40 | 모니터 상단 중앙 |  |
+| 042011_NO_FACE_-_-_NORMAL | NO_FACE | - | - | NORMAL | NY | 2026-10-30T04:20:21 | 3.3.12 | int8 | off | grayscale | 0.200 | 0.600 | 2026-10-30 |  | 40 | 모니터 상단 중앙 |  |
+| 045053_LEFT_45_CENTER_50cm_NORMAL | LEFT_45 | CENTER | 50cm | NORMAL | NY | 2026-10-30T04:51:03 | 3.3.12 | int8+EON | off | grayscale | 0.200 | 0.600 | 2026-10-30 | 실내 천장등 | 40cm | 모니터 상단 중앙 |  |
+| 045227_RIGHT_45_CENTER_50cm_NORMAL | RIGHT_45 | CENTER | 50cm | NORMAL | NY | 2026-10-30T04:52:37 | 3.3.12 | int8+EON | off | grayscale | 0.200 | 0.600 | 2026-10-30 | 실내 천장등 | 40cm | 모니터 상단 중앙 |  |
+
+# 환경: esp32 3.3.12 / ESP-NN off
 
 ## 검출률 / 오탐률
 
