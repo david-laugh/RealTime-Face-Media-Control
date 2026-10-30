@@ -20,7 +20,7 @@ docker compose --profile benchmark up -d --build          # broker + benchmark
 pip install -r services/model-benchmark/requirements.txt  # Python 3.12 권장
 python services/model-benchmark/src/serial_bridge.py --port COM5 --baud 115200 \
     --input-width 96 --input-height 96 --threshold 0.6
-# 케이스별 수집 (기본 120초)
+# 케이스별 수집 (10초 카운트다운 후 120초, 카운트다운 중 메시지는 저장 안 함. --start-delay 로 변경)
 docker compose exec model-benchmark python src/collector.py --case face-50-normal --operator NM \
     --download-date 2026-10-30 --camera-height 110cm --camera-position "모니터 상단"
 docker compose exec model-benchmark python src/analyzer.py --date 20261030

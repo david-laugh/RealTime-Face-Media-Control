@@ -31,6 +31,47 @@ def build_record(topic: str, raw: bytes, ctx: dict) -> dict | None:
     return {**rec, "payload": payload, "valid": not errors, "errors": errors}
 
 
+class Recorder:
+    """recording=True 인 동안만 저장. 카운트다운 중 수신 메시지는 dropped 로만 센다."""
+
+    def __init__(self, fh, ctx: dict):
+        self.fh, self.ctx = fh, ctx
+        self.recording = False
+        self.lock = threading.Lock()
+        self.counts = {"detection": 0, "telemetry": 0, "invalid": 0, "dropped_before_start": 0}
+
+    def handle(self, topic: str, raw: bytes) -> bool:
+        with self.lock:
+            if not self.recording:
+                if common.kind_of(topic):
+                    self.counts["dropped_before_start"] += 1
+                return False
+            rec = build_record(topic, raw, self.ctx)
+            if rec is None:
+                return False
+            self.fh.write(json.dumps(rec, ensure_ascii=False) + "\n")
+            self.counts[rec["kind"]] += 1
+            self.counts["invalid"] += not rec["valid"]
+            return True
+
+    def start(self):
+        with self.lock:
+            self.recording = True
+
+    def stop(self):
+        with self.lock:
+            self.recording = False
+
+
+def countdown(seconds: float, sleep=time.sleep, out=print):
+    remaining = int(seconds)
+    if seconds > remaining:
+        sleep(seconds - remaining)
+    for i in range(remaining, 0, -1):
+        out(f"[collector] 시작까지 {i}초 (자세를 잡으세요, 이 동안 수신 메시지는 저장 안 함)")
+        sleep(1)
+
+
 def resolve_case(args) -> dict:
     case = {"label": args.label, "position": args.position, "distance": args.distance, "env": args.env,
             "duration_s": args.duration, "expected_face": None, "case_id": None}
@@ -62,6 +103,7 @@ def main():
     p.add_argument("--distance", help="예: 50cm, 없으면 '-'")
     p.add_argument("--env", help="NORMAL | BRIGHT | LOW_LIGHT")
     p.add_argument("--duration", type=float, help="수집 시간(초), 기본 120")
+    p.add_argument("--start-delay", type=float, default=10, help="수집 시작 전 카운트다운(초), 기본 10")
     p.add_argument("--model-id", default=common.DEFAULT_MODEL_ID)
     p.add_argument("--device-id", default="+", help="기본 '+' (모든 디바이스)")
     p.add_argument("--mqtt-host", default=common.MQTT_HOST)
@@ -92,7 +134,7 @@ def main():
         "session_id": session_id, "model_id": args.model_id, "device_id": args.device_id,
         "case_id": case["case_id"], "label": case["label"], "position": case["position"],
         "distance": case["distance"], "env": case["env"], "expected_face": case["expected_face"], "duration_s": case["duration_s"],
-        "operator": args.operator, "started_at": now.isoformat(timespec="seconds"),
+        "operator": args.operator, "start_delay_s": args.start_delay,
         "deploy": args.deploy, "esp_nn": args.esp_nn, "color": args.color,
         "device_threshold": args.device_threshold, "bridge_threshold": args.bridge_threshold,
         "download_date": args.download_date, "lighting": args.lighting,
@@ -100,9 +142,8 @@ def main():
         "notes": args.notes,
     }
     ctx = {"label": case["label"], "position": case["position"], "distance": case["distance"], "env": case["env"]}
-    lock = threading.Lock()
-    counts = {"detection": 0, "telemetry": 0, "invalid": 0}
     fh = (out_dir / "messages.jsonl").open("w", encoding="utf-8")
+    recorder = Recorder(fh, ctx)
 
     def on_connect(client, _ud, _flags, rc, _props):
         if rc.is_failure:
@@ -112,30 +153,27 @@ def main():
             client.subscribe(common.topic(args.device_id, kind), qos=0)
 
     def on_message(_client, _ud, msg):
-        rec = build_record(msg.topic, msg.payload, ctx)
-        if rec is None:
-            return
-        with lock:
-            fh.write(json.dumps(rec, ensure_ascii=False) + "\n")
-            counts[rec["kind"]] += 1
-            counts["invalid"] += not rec["valid"]
+        recorder.handle(msg.topic, msg.payload)
 
     client = common.mqtt_client()
     client.on_connect, client.on_message = on_connect, on_message
     client.connect(args.mqtt_host, args.mqtt_port)
     client.loop_start()
-    print(f"[collector] {session_id}: {case['duration_s']}s 수집 → {out_dir}")
     try:
+        countdown(args.start_delay)
+        recorder.start()
+        meta["started_at"] = datetime.now().isoformat(timespec="seconds")
+        print(f"[collector] {session_id}: {case['duration_s']}s 수집 시작 → {out_dir}")
         time.sleep(case["duration_s"])
     except KeyboardInterrupt:
         print("[collector] 중단됨")
+    recorder.stop()
     client.loop_stop()
     client.disconnect()
-    with lock:
-        fh.close()
-    meta.update(ended_at=datetime.now().isoformat(timespec="seconds"), counts=counts)
+    fh.close()
+    meta.update(ended_at=datetime.now().isoformat(timespec="seconds"), counts=recorder.counts)
     (out_dir / "meta.json").write_text(json.dumps(meta, ensure_ascii=False, indent=2), encoding="utf-8")
-    print(f"[collector] 완료: {counts}")
+    print(f"[collector] 완료: {recorder.counts}")
 
 
 if __name__ == "__main__":
