@@ -172,7 +172,7 @@ def write_reports(rows, metas, out_dir: Path):
         "## 검출률 / 오탐률", "",
         md_table(["model_id", *key, "metric", "sessions", "frames", "invalid_msgs", "face_rate"], rows), "",
         "## confidence 임계값별 비율 (저장된 confidence ≥ t, raw_face_detected 와 무관)", "",
-        "기기는 0.2 이상 박스를 출력하므로 bridge 임계값보다 낮은 t 도 계산 가능.", "",
+        "기기 출력 임계값(측정 조건 표 device_threshold) 미만 박스는 기기가 출력하지 않으므로 그보다 낮은 t 는 의미 없음.", "",
         md_table([*key, *(f"rate@{t}" for t in THRESHOLDS)], rows), "",
         "## 성능 / 안정성", "",
         md_table([*key, "inference_ms_mean", "inference_ms_p50", "inference_ms_p95", "fps",

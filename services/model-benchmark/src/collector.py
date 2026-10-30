@@ -72,7 +72,8 @@ def main():
     p.add_argument("--deploy", default="int8", help="배포 옵션, 예: int8, int8+EON")
     p.add_argument("--esp-nn", default="off", choices=["on", "off"])
     p.add_argument("--color", default="grayscale", choices=["grayscale", "rgb"])
-    p.add_argument("--device-threshold", type=float, default=0.2, help="스케치의 검출 출력 임계값")
+    p.add_argument("--device-threshold", type=float, default=0.6,
+                   help="기기 FOMO 출력 임계값 (model_variables.h, 2026-10-30 확인값 0.6)")
     p.add_argument("--bridge-threshold", type=float, default=0.5, help="serial_bridge --threshold 값")
     p.add_argument("--download-date", default="", help="Edge Impulse 라이브러리 다운로드 날짜 YYYY-MM-DD")
     p.add_argument("--lighting", default="", help="조명 설명")

@@ -18,7 +18,8 @@ Edge Impulse 얼굴 검출 모델을 XIAO ESP32S3 Sense에서 측정합니다 (c
 docker compose --profile benchmark up -d --build          # broker + benchmark
 # 호스트: 스케치 업로드 후 (bench-sketch/README.md)
 pip install -r services/model-benchmark/requirements.txt  # Python 3.12 권장
-python services/model-benchmark/src/serial_bridge.py --port COM5 --baud 115200 \n    --input-width <W> --input-height <H> --threshold 0.5   # W/H: 모델 입력 해상도
+python services/model-benchmark/src/serial_bridge.py --port COM5 --baud 115200 \
+    --input-width 96 --input-height 96 --threshold 0.5
 # 케이스별 수집 (기본 120초)
 docker compose exec model-benchmark python src/collector.py --case face-50-normal --operator NM \
     --download-date 2026-10-30 --camera-height 110cm --camera-position "모니터 상단"
@@ -26,7 +27,7 @@ docker compose exec model-benchmark python src/analyzer.py --date 20261030
 ```
 
 `--operator`는 이니셜/별칭만 사용하세요. 측정 조건 기본값: `--esp-nn off --color grayscale
---device-threshold 0.2 --bridge-threshold 0.5` (바꿨으면 명시).
+--device-threshold 0.6 --bridge-threshold 0.5` (기기 값은 `bench-sketch/README.md` 참고, 바꿨으면 명시).
 
 ### 측정 조건 정의
 
@@ -36,7 +37,7 @@ docker compose exec model-benchmark python src/analyzer.py --date 20261030
 ### 판정/지표 규칙
 
 - 프레임마다 최고 confidence 박스 사용. 박스 없음 → `confidence=0`, `bbox=null`.
-- `raw_face_detected` = confidence ≥ bridge `--threshold`. 기기는 0.2 이상 박스를 출력하므로
+- `raw_face_detected` = confidence ≥ bridge `--threshold`. 기기는 출력 임계값(`--device-threshold`) 이상 박스를 모두 출력하므로
   analyzer 임계값 스윕(0.3~0.9)은 저장된 confidence로 계산합니다.
 - `bbox`: FOMO는 중심점 검출 모델이라 width/height는 얼굴 크기가 아니라 **출력 격자 셀 크기**입니다.
   x, y(셀 위치)만 의미가 있습니다.

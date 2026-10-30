@@ -8,7 +8,7 @@
 
 변환 규칙:
 - 한 프레임의 박스 중 최고 confidence 박스 사용. 박스가 없으면 confidence=0, bbox=null.
-- raw_face_detected = (최고 confidence >= --threshold). 기기는 0.2 이상을 모두 출력하므로
+- raw_face_detected = (최고 confidence >= --threshold). 기기는 출력 임계값 이상 박스를 모두 출력하므로
   임계값 미만이어도 confidence 는 그대로 보내 analyzer 가 임계값 스윕에 쓴다 (이때 bbox=null).
 - DSP → telemetry.preprocess_ms, Classification → inference_ms.
 - bbox 는 --input-width/--input-height 로 나눈 0~1 값. FOMO 는 중심점 검출 모델이라
