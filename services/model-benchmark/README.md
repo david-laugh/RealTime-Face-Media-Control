@@ -19,7 +19,7 @@ docker compose --profile benchmark up -d --build          # broker + benchmark
 # 호스트: 스케치 업로드 후 (bench-sketch/README.md)
 pip install -r services/model-benchmark/requirements.txt  # Python 3.12 권장
 python services/model-benchmark/src/serial_bridge.py --port COM5 --baud 115200 \n    --input-width <W> --input-height <H> --threshold 0.5   # W/H: 모델 입력 해상도
-# 케이스별 수집 (각 30초)
+# 케이스별 수집 (기본 120초)
 docker compose exec model-benchmark python src/collector.py --case face-50-normal --operator NM \
     --download-date 2026-10-30 --camera-height 110cm --camera-position "모니터 상단"
 docker compose exec model-benchmark python src/analyzer.py --date 20261030
@@ -27,6 +27,11 @@ docker compose exec model-benchmark python src/analyzer.py --date 20261030
 
 `--operator`는 이니셜/별칭만 사용하세요. 측정 조건 기본값: `--esp-nn off --color grayscale
 --device-threshold 0.2 --bridge-threshold 0.5` (바꿨으면 명시).
+
+### 측정 조건 정의
+
+- FACE = 정면 응시 + **얼굴을 카메라 화면 중앙에 둠** (`position: CENTER`, 기본값).
+- 모델에는 320x240 중 가운데 240x240만 입력되므로 화면 좌우 가장자리는 인식 영역 밖입니다.
 
 ### 판정/지표 규칙
 
@@ -43,7 +48,7 @@ docker compose exec model-benchmark python src/analyzer.py --date 20261030
 ```bash
 docker compose --profile benchmark up -d --build
 docker compose exec -d model-benchmark python src/mock_publisher.py --mode alternate --period 5
-docker compose exec model-benchmark python src/collector.py --model-id mock-model --label FACE --distance 50cm --env NORMAL --duration 20
+docker compose exec model-benchmark python src/collector.py --model-id mock-model --label FACE --distance 50cm --env NORMAL --duration 20  # mock은 짧게
 docker compose exec model-benchmark python src/analyzer.py --model-id mock-model
 ```
 
