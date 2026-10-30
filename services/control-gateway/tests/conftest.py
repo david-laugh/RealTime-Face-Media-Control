@@ -47,6 +47,14 @@ def detection_payload(face: bool, seq: int = 1, device_id: str = "xiao-01", **ex
     return json.dumps(data).encode()
 
 
+def ei_payload(face: bool, confidence, seq: int = 1, device_id: str = "xiao-01", **extra) -> bytes:
+    """Edge Impulse-shaped detection (confidence is always sent for this source)."""
+    return detection_payload(
+        face, seq, device_id,
+        source="edge_impulse", model_id="ei-541658-fomo01-int8", confidence=confidence, **extra,
+    )
+
+
 def status_payload(online: bool, device_id: str = "xiao-01") -> bytes:
     return json.dumps(
         {"schema_version": "1.0", "device_id": device_id, "source": "mock", "online": online}

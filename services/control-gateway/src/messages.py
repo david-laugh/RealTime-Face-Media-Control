@@ -23,6 +23,7 @@ class Detection:
     model_id: str
     raw_face_detected: bool
     confidence: Optional[float] = None
+    threshold: Optional[float] = None
     inference_ms: Optional[int] = None
 
 
@@ -70,6 +71,18 @@ def _check_common(data: dict[str, Any], topic_device_id: str) -> tuple[str, str]
     return device_id, source
 
 
+def _optional_score(data: dict[str, Any], field: str) -> Optional[float]:
+    """0..1 model score, or None when absent/null. 0 is a valid score, not "missing"."""
+    value = data.get(field)
+    if value is None:
+        return None
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        raise MessageError(f"field '{field}' must be a number")
+    if not 0.0 <= value <= 1.0:
+        raise MessageError(f"field '{field}' must be within 0..1")
+    return float(value)
+
+
 def parse_detection(payload: bytes, topic_device_id: str) -> Detection:
     data = _load_object(payload)
     device_id, source = _check_common(data, topic_device_id)
@@ -81,12 +94,13 @@ def parse_detection(payload: bytes, topic_device_id: str) -> Detection:
     model_id = _require(data, "model_id", str)
     raw = _require(data, "raw_face_detected", bool)
 
-    confidence = data.get("confidence")
-    if confidence is not None:
-        if isinstance(confidence, bool) or not isinstance(confidence, (int, float)):
-            raise MessageError("field 'confidence' must be a number")
-        if not 0.0 <= confidence <= 1.0:
-            raise MessageError("field 'confidence' must be within 0..1")
+    confidence = _optional_score(data, "confidence")
+    if source == "edge_impulse" and confidence is None:
+        # Benchmark needs the top score on every frame; 0 means "no valid score".
+        raise MessageError("edge_impulse detection requires numeric 'confidence' (0 when no face score)")
+    if source == "mock" and confidence is not None:
+        raise MessageError("mock detection must not send a confidence value")
+    threshold = _optional_score(data, "threshold")
     inference_ms = data.get("inference_ms")
     if inference_ms is not None and (isinstance(inference_ms, bool) or not isinstance(inference_ms, int)):
         raise MessageError("field 'inference_ms' must be integer")
@@ -98,7 +112,8 @@ def parse_detection(payload: bytes, topic_device_id: str) -> Detection:
         source=source,
         model_id=model_id,
         raw_face_detected=raw,
-        confidence=float(confidence) if confidence is not None else None,
+        confidence=confidence,
+        threshold=threshold,
         inference_ms=inference_ms,
     )
 

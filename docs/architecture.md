@@ -87,7 +87,9 @@ sequenceDiagram
 
 ## 6. 병목 분석
 
-- **Primary runtime bottleneck은 Container가 아니라 XIAO ESP32S3 Sense의 Camera preprocessing 및 Edge ML inference가 될 가능성이 높습니다.** (실제 모델 연동 후 측정 필요)
+- **Primary runtime bottleneck은 Container가 아니라 XIAO ESP32S3 Sense의 Camera preprocessing 및 Edge ML inference가 될 가능성이 높습니다.**
+  D 담당 환경(모델 541658, 보드 패키지 3.3.12, ESP-NN 비활성화)에서 약 2.3초/프레임이 보고되었습니다 (`docs/model-integration-guide.md` §3).
+- 실제 모델은 프레임마다 검출이 끊길 수 있어, Gateway에 방향별 debounce 구조를 두었습니다 (기본 꺼짐, 수치는 Benchmark 후 결정).
 - MQTT Broker, Gateway, WebSocket은 메시지가 수백 byte JSON이라 병목 가능성이 낮습니다.
   로컬 검증에서 MQTT publish → WebSocket 수신이 수 ms 이내였습니다 (`docs/demo-test.md`).
 - 현재 Mock 데모에서 체감 반응 시간을 지배하는 것은 **10초 발행 주기**입니다 (최대 10초 지연).
