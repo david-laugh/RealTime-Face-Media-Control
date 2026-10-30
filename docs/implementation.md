@@ -70,7 +70,7 @@ on_message     ─┘ threadsafe      ├─ StateManager.handle_*()  → Option
 - `ConnectionManager`는 asyncio Lock으로 "새 client 등록 + snapshot 전송"과 broadcast를 직렬화 → 새 client가 snapshot보다 broadcast를 먼저 받는 일이 없음. 전송 실패/2초 timeout client는 제거.
 - 잘못된 메시지는 `MessageError`로 처리, 예상치 못한 예외도 consumer loop에서 잡아 서비스 유지.
 - paho `reconnect_delay_set(1, 10)` + `loop_start()`로 자동 재연결, 재연결 시 재구독 (`on_connect`).
-- **Debounce** (`state_manager.DebounceRule`): PLAY/PAUSE 방향별 `min_count`(연속 detection 수)와 `min_ms`(첫 후보부터 시간). 둘 다 만족하는 detection 수신 시 전환, 현재 명령과 같은 값이 오면 후보 취소. 기본 `1/0` = 꺼짐(즉시 전환).
+- **Debounce** (`state_manager.DebounceRule`): PLAY/PAUSE 방향별 `min_count`(연속 detection 수)와 `min_ms`(현재 명령을 마지막으로 뒷받침한 detection 이후 시간 = Benchmark hold 정의). 둘 다 만족하는 detection 수신 시 전환, 현재 명령과 같은 값이 오면 후보 취소. 기본 `1/0` = 꺼짐(즉시 전환).
   Fail-safe(timeout/offline/broker 끊김)는 `_transition()`을 직접 호출해 debounce를 거치지 않고 후보도 버림. 수치는 Benchmark 후 결정 (`docs/model-integration-guide.md` §4).
 - `messages.parse_detection`: `edge_impulse`는 숫자 `confidence` 필수(0 허용), Mock은 `confidence` 숫자 금지, `threshold`는 선택 0–1.
 

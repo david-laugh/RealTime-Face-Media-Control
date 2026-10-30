@@ -154,12 +154,12 @@ Gateway 구독: `smart-media/+/detection`, `smart-media/+/status` (`+` = device_
 
 | 환경변수 | 기본값 | 의미 |
 |----------|--------|------|
-| `PLAY_CONFIRM_COUNT` / `PLAY_CONFIRM_MS` | `1` / `0` | PAUSE→PLAY: 연속 `true` 횟수 **그리고** 첫 `true`부터의 시간 |
-| `PAUSE_CONFIRM_COUNT` / `PAUSE_CONFIRM_MS` | `1` / `0` | PLAY→PAUSE: 연속 `false` 횟수 **그리고** 첫 `false`부터의 시간 |
+| `PLAY_CONFIRM_COUNT` / `PLAY_CONFIRM_MS` | `1` / `0` | PAUSE→PLAY: 연속 `true` 횟수 **그리고** 마지막 `false` 이후 시간 |
+| `PAUSE_CONFIRM_COUNT` / `PAUSE_CONFIRM_MS` | `1` / `0` | PLAY→PAUSE: 연속 `false` 횟수 **그리고** 마지막 `true` 이후 시간 (= Benchmark hold) |
 
 - 조건이 충족된 detection을 받는 순간 전환합니다. 현재 명령과 같은 값이 오면 후보는 취소됩니다.
 - **timeout / offline / broker 끊김 PAUSE는 debounce 없이 즉시** 발생하고 대기 중인 후보를 버립니다.
-- 수치는 Benchmark 측정 후 결정합니다. 그 전까지 기본값(꺼짐)을 유지합니다. 상세: [`model-integration-guide.md`](model-integration-guide.md) §4
+- 기본값은 꺼짐. Benchmark 시연 후보값은 `PAUSE_CONFIRM_MS=7500` (판정 t=0.5는 기기/브리지 설정). 상세: [`model-integration-guide.md`](model-integration-guide.md) §4.3
 
 ## 4. Timeout 정책
 

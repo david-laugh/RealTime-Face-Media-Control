@@ -84,16 +84,19 @@ raw_face_detected == (confidence >= threshold)      # threshold를 보낼 때 �
 - PLAY / PAUSE 방향별로 **독립된 확정 규칙**(`DebounceRule`)을 둡니다.
 - 현재 명령과 반대 값이 나오면 "후보"가 되고, 아래 두 조건을 **모두** 만족하는 detection이 오면 전환합니다.
   - `COUNT`: 후보 값이 연속으로 온 횟수 ≥ `*_CONFIRM_COUNT`
-  - `MS`: 첫 후보 detection부터 지금까지의 시간(Gateway 시계) ≥ `*_CONFIRM_MS`
+  - `MS`: 현재 명령을 **마지막으로 뒷받침한 detection**부터 지금까지의 시간(Gateway 시계) ≥ `*_CONFIRM_MS`
+    (PLAY 중이면 "마지막 얼굴 검출 이후 시간". 시작 직후·fail-safe 직후처럼 그런 detection이 없으면 첫 후보부터)
+    → model-benchmark analyzer의 비대칭 hold 시뮬레이션("마지막 검출 후 hold초 경과 시 PAUSE")과 같은 정의라
+    Benchmark의 hold 값을 그대로 `PAUSE_CONFIRM_MS`에 넣으면 됩니다.
 - 현재 명령과 같은 값이 한 번이라도 오면 후보는 취소됩니다 (hysteresis).
 - 평가는 **detection 수신 시점에만** 합니다. 메시지 없이 시간만 흘러 PLAY가 확정되는 일은 없습니다.
 
 | 환경변수 | 기본값 | 의미 |
 |----------|--------|------|
 | `PLAY_CONFIRM_COUNT` | `1` | PLAY 확정에 필요한 연속 `true` 수 |
-| `PLAY_CONFIRM_MS` | `0` | PLAY 확정에 필요한 연속 `true` 지속 시간 |
+| `PLAY_CONFIRM_MS` | `0` | 마지막 `false` 이후 경과해야 PLAY 확정 |
 | `PAUSE_CONFIRM_COUNT` | `1` | PAUSE 확정에 필요한 연속 `false` 수 |
-| `PAUSE_CONFIRM_MS` | `0` | PAUSE 확정에 필요한 연속 `false` 지속 시간 |
+| `PAUSE_CONFIRM_MS` | `0` | 마지막 `true`(얼굴 검출) 이후 경과해야 PAUSE 확정 (= Benchmark hold) |
 
 **기본값 = debounce 꺼짐** (detection마다 즉시 전환, 기존 Mock 데모와 동일). 현재 상태는 `GET /api/state`의 `debounce`, `pending_command`, `pending_count`로 확인합니다.
 
@@ -103,11 +106,22 @@ raw_face_detected == (confidence >= threshold)      # threshold를 보낼 때 �
 - **횟수 기준(`*_CONFIRM_COUNT`)은 보조 하한**: 프레임이 빠를 때 짧은 시간에 몇 프레임만으로 전환되는 것을 막습니다.
 - 비대칭 설정이 자연스럽습니다: "잠깐 끊긴 검출"을 무시하려면 PAUSE를 느리게(예: PAUSE에만 시간 기준), PLAY는 빠르게 둡니다.
 
-### 4.3 수치는 아직 정하지 않음
+### 4.3 수치: Benchmark 후보값 (기본값은 아직 꺼짐)
 
-- 최종 수치는 **D 담당 Benchmark 측정(연속 미검출 구간 길이 분포 등) 결과를 받은 뒤** 정합니다. 그때까지 기본값(꺼짐)을 유지합니다.
+D 담당 Benchmark 결과(`services/model-benchmark/FINDINGS.md`, 50cm·조건당 60초 1회 측정의 **[추정]** 값)의 시연 설정 후보:
+
+| 항목 | 후보 | 설정 위치 |
+|------|------|-----------|
+| 판정 임계값 t | `0.5` | 기기/브리지 쪽 (`serial_bridge --threshold 0.5`, 향후 펌웨어 `kFaceThreshold`). Gateway는 `raw_face_detected`만 사용 |
+| PLAY | 검출 1회면 즉시 | `PLAY_CONFIRM_COUNT=1`, `PLAY_CONFIRM_MS=0` (기본값) |
+| PAUSE | 마지막 검출 후 7.5초 | `PAUSE_CONFIRM_MS=7500` |
+
+- Benchmark 추정: 정면 50cm에서 잘못된 PAUSE 0회. 대신 45도 시선 이탈 때도 재생이 유지되는 쪽으로 작용하고, PAUSE 반응이 약 7.5초(+프레임 간격) 늦어집니다.
+  → 시연 시나리오는 "자리를 떠났다 돌아오기"가 적합합니다 (FINDINGS.md "시연 권장").
+- 측정 표본이 작아(조건당 약 25프레임) **기본값은 꺼짐으로 유지**하고, 시연할 때 `.env`로 켭니다.
 - 테스트 코드의 값(예: `PAUSE_CONFIRM_MS=5000`, `COUNT=3`)은 동작 검증용 입력일 뿐 권장값이 아닙니다.
 - 활성화 방법: `.env`에 값 설정 → `docker compose up -d control-gateway` (시작 로그에 `PAUSE debounce enabled ...` WARNING 출력).
+  일회성: `PAUSE_CONFIRM_MS=7500 docker compose up -d control-gateway`
 
 ### 4.4 Fail-safe PAUSE는 debounce와 분리
 

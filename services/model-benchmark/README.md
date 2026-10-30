@@ -47,6 +47,29 @@ docker compose exec model-benchmark python src/analyzer.py --date 20261030
 - DSP 시간 → telemetry `preprocess_ms`, Classification 시간 → `inference_ms`.
  케이스 목록: `test-cases/cases.yaml` (`--case` 대신 `--label/--distance/--env` 직접 지정 가능).
 
+## Classification 모델 (`xiao_face_presence_example/`)
+
+Edge Impulse 프로젝트 1152903 `face-presence-binary` (이미지 분류, int8, 96x96 RGB, 라벨 `face_absent` / `face_present`).
+bbox 없이 프레임마다 얼굴 유무만 출력합니다. MQTT 계약은 그대로이고 `bbox`만 생략됩니다.
+
+- 스케치 출력: 예제의 `Predictions:` 라벨별 점수 + 판정 한 줄 `Face presence: face_present (0.91200)`
+- bridge: `confidence` = `face_present` 점수, `raw_face_detected` = `confidence >= --threshold`
+  (이진 분류라 `--threshold 0.5`이면 top label 판정과 같음)
+
+```bash
+# Arduino IDE: face-presence-binary_inferencing ZIP 라이브러리 설치, 보드 XIAO_ESP32S3, PSRAM: OPI PSRAM
+python services/model-benchmark/src/serial_bridge.py --port COM5 --input-width 96 --input-height 96 \
+    --threshold 0.5 --model-id ei-1152903-face-presence-binary-int8
+docker compose exec model-benchmark python src/collector.py --model-id ei-1152903-face-presence-binary-int8 \
+    --bridge-threshold 0.5 --device-threshold 0 --label FACE --distance 50cm --env NORMAL
+```
+
+- `--device-threshold`: 분류 모델은 기기 쪽 출력 임계값이 없어 모든 점수가 나오므로 `0`으로 기록합니다.
+- 스케치는 Edge Impulse 원본 예제의 **BGR→RGB 스왑을 그대로 유지**하고 있습니다. FOMO 모델(541658)에서는 스왑을 빼야 검출됐으므로
+  (`bench-sketch/README.md`), 이 모델에서도 `face_present` 점수가 이상하게 낮으면 `ei_camera_get_data()`의 스왑을 제거해 비교하세요.
+- 라이브러리 기본값은 ESP-NN **켜짐**입니다. 첫 추론에서 크래시가 나면 `bench-sketch/README.md`의 ESP-NN off 방법을 적용하세요.
+- 보드 없이 확인: `python scripts/pipeline_e2e_test.py --model classification` (저장소 루트)
+
 ## Mock 단독 실행 (기기 없이)
 
 ```bash

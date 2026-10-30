@@ -1,0 +1,4 @@
+# Contract schemas are compared byte-for-byte (services/model-benchmark/tests/test_schemas_sync.py);
+# keep LF on every OS so Windows autocrlf checkouts do not break the sync check.
+contracts/**/*.json text eol=lf
+services/model-benchmark/schemas/*.json text eol=lf

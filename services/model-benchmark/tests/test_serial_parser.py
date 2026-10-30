@@ -120,3 +120,51 @@ def test_default_threshold_is_model_original_06():
     _, pubs, _ = run([REAL_FACE[0], REAL_FACE[1], "  face (0.550000) [ x: 8, y: 8, width: 8, height: 8 ]\n"])
     det = detections(pubs)[0]
     assert det["raw_face_detected"] is False and det["confidence"] == 0.55
+
+
+# ---- classification model (xiao_face_presence_example.ino) ----
+
+CLS = ["Predictions (DSP: 4 ms., Classification: 310 ms., Anomaly: 0 ms.): \r\n", "Predictions:\r\n"]
+
+
+def cls_frame(absent, present):
+    top = ("face_present", present) if present > absent else ("face_absent", absent)
+    return [*CLS, f"  face_absent: {absent:.5f}\r\n", f"  face_present: {present:.5f}\r\n",
+            f"Face presence: {top[0]} ({top[1]:.5f})\r\n"]
+
+
+def run_cls(lines, threshold=0.5):
+    pubs = []
+    parser = SerialParser(log=lambda m: None)
+    bridge = Bridge(lambda t, m: pubs.append((t, m)), "xiao-bench-01", "ei-1152903-face-presence-binary",
+                    96, 96, start=0.0, threshold=threshold)
+    for i, line in enumerate(lines):
+        if frame := parser.feed(line, now=float(i)):
+            bridge.handle(frame)
+    if frame := parser.flush():
+        bridge.handle(frame)
+    return parser, pubs
+
+
+def test_classification_face_present_and_absent():
+    parser, pubs = run_cls(cls_frame(0.08, 0.92) + cls_frame(0.7, 0.3))
+    present, absent = detections(pubs)
+    assert (present["raw_face_detected"], present["confidence"], present["threshold"]) == (True, 0.92, 0.5)
+    assert (absent["raw_face_detected"], absent["confidence"]) == (False, 0.3)
+    assert "bbox" not in present and "bbox" not in absent
+    assert present["inference_ms"] == 310
+    assert parser.parse_failures == 0
+    for t, m in pubs:
+        assert common.validate(common.kind_of(t), m) == []
+
+
+def test_classification_below_threshold_keeps_score():
+    _, pubs = run_cls(cls_frame(0.45, 0.55), threshold=0.6)
+    assert detections(pubs)[0]["raw_face_detected"] is False  # 0.55 kept as confidence for the sweep
+    assert detections(pubs)[0]["confidence"] == 0.55
+
+
+def test_classification_without_face_label_scores_zero():
+    _, pubs = run_cls([*CLS, "  something_else: 0.99000\r\n"])
+    det = detections(pubs)[0]
+    assert det["confidence"] == 0 and det["raw_face_detected"] is False

@@ -181,8 +181,26 @@ def test_pause_hold_suppresses_flicker(clock):
 
 def test_pause_hold_still_pauses_on_sustained_absence(clock):
     sm = StateManager(TIMEOUT, "xiao-01", mono_ms=clock, pause_debounce=DebounceRule(min_ms=5000))
-    # false at +2.3 s starts the candidate; held 2.3 s, 4.6 s -> pending; 6.9 s >= 5 s -> PAUSE.
+    # Measured from the last true (t=0): falses at 2.3 s, 4.6 s pending; 6.9 s >= 5 s -> PAUSE.
     assert feed(sm, clock, [True, False, False, False, False]) == ["PLAY", "PAUSE"]
+
+
+def test_pause_hold_is_measured_from_last_face(clock):
+    # Same definition as model-benchmark analyzer hold_simulation: PAUSE once
+    # hold ms passed since the last detection (7.5 s hold, ~2.3 s frames).
+    sm = StateManager(TIMEOUT, "xiao-01", mono_ms=clock, pause_debounce=DebounceRule(min_ms=7500))
+    assert sm.handle_detection(ei(True, 1))["command"] == "PLAY"  # last face at t=0
+    for seq, t in ((2, 2300), (3, 4600), (4, 6900)):
+        clock.advance(2300)
+        assert sm.handle_detection(ei(False, seq)) is None, t
+    clock.advance(2300)  # t=9200 >= 7500 since the last face
+    assert sm.handle_detection(ei(False, 5))["command"] == "PAUSE"
+
+
+def test_pause_hold_restarts_after_each_face(clock):
+    sm = StateManager(TIMEOUT, "xiao-01", mono_ms=clock, pause_debounce=DebounceRule(min_ms=7500))
+    # A face every 3rd frame (~6.9 s apart) keeps playing.
+    assert feed(sm, clock, [True, False, False] * 5) == ["PLAY"]
 
 
 def test_pause_count_suppresses_flicker(clock):

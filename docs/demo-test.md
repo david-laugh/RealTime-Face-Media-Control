@@ -33,6 +33,10 @@ cd services/control-gateway && pip install -r requirements-dev.txt && pytest -q
 # E2E (Docker 실행 중)
 python scripts/integration_test.py --broker-restart
 
+# 전체 파이프라인 (benchmark 포함, 보드 없이)
+docker compose --profile benchmark up -d --build
+python scripts/pipeline_e2e_test.py
+
 # PC mock device로 xiao-01 흐름 확인
 python scripts/mock_publisher.py --count 3 --interval 10
 
@@ -239,6 +243,33 @@ Gateway → 브라우저 전달 지연(web-ui 표시 `전달 Nms`, 같은 PC): 0
 - `status {"online":true}` retained, detection `seq 98 → 99`, `uptime_ms 967763 → 977763` (정확히 10초 간격), `source:"mock"`, true/false 교차
 - broker 재시작(W6) 후 같은 client id로 재접속 기록 (`04:12:03`, `04:12:07`)
 
+### 3.8 model-benchmark(#4) 포함 전체 파이프라인 (4차)
+
+`main`(#3 계약/debounce + #4 model-benchmark) 기준, `docker compose --profile benchmark up -d --build`로 4개 컨테이너 실행.
+보드 없이 `scripts/pipeline_e2e_test.py`로 확인했습니다 (P2는 serial_bridge의 파서·Bridge 코드를 그대로 쓰고 시리얼 포트만 재생 입력으로 대체).
+
+| ID | 흐름 | debounce 꺼짐 (기본) | `PAUSE_CONFIRM_MS=7500` (Benchmark 후보) |
+|----|------|----------------------|------------------------------------------|
+| P1a | benchmark `mock_publisher`(alternate 3 s) → Gateway | PASS `PLAY,PAUSE,PLAY,PAUSE` | PASS `PLAY` (3 s 교차는 7.5 s hold 안이라 유지) |
+| P1b | WebSocket `source:mock`, `confidence:null` | PASS | PASS |
+| P1c/d | collector 저장(10 detection 모두 valid) → analyzer `summary.md` | PASS | PASS |
+| P2a | serial replay(2.3 s/프레임, 12프레임) → bridge payload 전부 Gateway 수용 | PASS (invalid 0) | PASS |
+| P2b | 깜빡이는 검출 `T F T F T F T F F F F T` | PASS 9회 전환 | PASS **3회** `PLAY,PAUSE,PLAY` |
+| P2c | WebSocket `source:edge_impulse`, `confidence` 숫자(0 포함) | PASS | PASS |
+| P2d/e | collector: 12프레임 valid, `confidence:0` 5건 유지, `threshold:0.6` 기록, `bbox`는 검출 시에만 | PASS | PASS |
+| P2f | analyzer `summary.md` | PASS | PASS |
+| P3 | replay 중단 → fail-safe `PAUSE/DEVICE_TIMEOUT` | PASS 25.1 s | PASS 26.1 s (debounce로 지연 없음) |
+
+기대 PLAY/PAUSE는 Gateway의 `StateManager`에 collector가 기록한 수신 시각을 넣어 계산합니다 (debounce 설정과 무관하게 같은 스크립트로 판정).
+테스트 결과는 컨테이너 안 `/tmp/e2e-*`에 저장되어 실제 측정 결과(`services/model-benchmark/results/`)와 섞이지 않습니다.
+
+회귀: pytest Gateway **98 passed**, model-benchmark **24 passed**, `integration_test.py --broker-restart` **14/14**,
+`webui_e2e_test.py` **W1–W8 8/8 PASS** (보드 offline 상태에서 재실행 — 3차의 W5/W6 FAIL은 보드 간섭이었음을 확인).
+
+수정 사항:
+- `PAUSE_CONFIRM_MS` 시간 기준을 "첫 미검출부터" → "**마지막 검출부터**"로 변경. Benchmark analyzer의 hold 정의와 같아져 FINDINGS의 hold 7.5 s를 그대로 설정 가능 (이전 정의로는 7500을 넣으면 실제 약 9.8 s 후 PAUSE)
+- `.gitattributes`: 계약 JSON을 LF로 고정. Windows `core.autocrlf=true`에서 `schemas/` 사본이 CRLF로 체크아웃되어 model-benchmark `test_schemas_sync.py` 3건이 실패하던 문제 (내용은 동일했음)
+
 ## 4. 발견된 문제
 
 | # | 문제 | 해결 |
@@ -251,12 +282,14 @@ Gateway → 브라우저 전달 지연(web-ui 표시 `전달 Nms`, 같은 PC): 0
 | 6 | Claude in Chrome 확장 미연결 | 설치된 Chrome을 headless + DevTools Protocol로 직접 구동해 대체 |
 | 7 | 실제 보드가 `xiao-01`로 발행 중이라 `webui_e2e_test.py` W5/W6가 간섭받음 | 브라우저 E2E는 보드 전원을 끄고 실행 (web-ui가 device_id를 필터링하지 않음) |
 | 8 | 로컬 esp32 core가 3.3.12 → 2.0.17로 바뀌어 있었음 | 2.0.17로 컴파일 확인. 공용 Arduino 폴더라 3.3.12를 재설치하지 않음 |
-| 9 | `services/model-benchmark/schemas/detection.schema.json`(D 사본)이 새 계약과 달라짐 | D 브랜치 범위라 수정하지 않음. D 담당이 다시 복사 필요 (`test_schemas_sync.py`) |
+| 9 | `services/model-benchmark/schemas/detection.schema.json`(D 사본)이 새 계약과 달라짐 | D 담당이 #4에서 다시 복사함 (해결) |
+| 10 | Windows autocrlf로 schemas 사본이 CRLF → `test_schemas_sync.py` 바이트 비교 실패 | `.gitattributes`로 LF 고정 (3.8) |
+| 11 | `PAUSE_CONFIRM_MS` 시간 기준이 Benchmark hold 정의와 달랐음 | 마지막 검출 기준으로 변경 (3.8) |
 
 ## 5. 남은 작업
 
 - 실기기 테스트 A02–A08 (3차에서 보드 발행·재접속은 관찰됨, 직접 수행한 테스트는 아님)
-- 보드를 끈 상태에서 `webui_e2e_test.py` W5/W6 재실행
+- 실제 보드 + Edge Impulse 모델(serial_bridge 또는 펌웨어 Provider)로 debounce 후보값 시연 검증
 - Benchmark 결과를 받은 뒤 debounce 수치 결정 및 실기기 검증
 - 사람이 직접 보는 브라우저(헤드리스 아님)에서 실기기 ESP32와 함께 최종 시연 확인
 - Broker 인증, 실제 모델 연동 (`docs/model-integration-guide.md`)

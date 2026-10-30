@@ -1,9 +1,13 @@
 """Edge Impulse 예제 스케치 시리얼 출력 → MQTT detection/telemetry (호스트에서 직접 실행).
 
-개인정보 보호: allowlist 파싱. 아래 3 형식만 처리하고 나머지 줄은 저장/로그/publish 없이 개수만 센다.
+개인정보 보호: allowlist 파싱. 아래 형식만 처리하고 나머지 줄은 저장/로그/publish 없이 개수만 센다.
   "Predictions (DSP: %d ms., Classification: %d ms., Anomaly: %d ms.): "
-  "Object detection bounding boxes:"
-  "  %s (%f) [ x: %u, y: %u, width: %u, height: %u ]"
+  Object detection (FOMO, bench-sketch):
+    "Object detection bounding boxes:"
+    "  %s (%f) [ x: %u, y: %u, width: %u, height: %u ]"
+  Classification (xiao_face_presence_example, 라벨 face_absent / face_present):
+    "Predictions:"
+    "  %s: %.5f"
 200자 초과 또는 숫자 나열이 긴 줄(debug_nn features 덤프 의심)은 내용 없이 경고 카운트만 남긴다.
 
 변환 규칙:
@@ -13,6 +17,8 @@
   기기는 출력 임계값(0.2) 이상 박스를 모두 출력하므로 임계값 미만이어도 confidence 는 그대로 보내
   analyzer 가 임계값 스윕에 쓴다 (이때 bbox 생략).
 - DSP → telemetry.preprocess_ms, Classification → inference_ms.
+- Classification 모델: confidence = 얼굴 라벨(--face-label, 기본 face_present) 점수, bbox 없음.
+  raw_face_detected = (confidence >= --threshold). 이진 분류라 --threshold 0.5 이면 top label 판정과 같다.
 - bbox 는 --input-width/--input-height 로 나눈 0~1 값. FOMO 는 중심점 검출 모델이라
   width/height 는 얼굴 크기가 아니라 출력 격자 셀 크기(예: 96x96 입력 → 8px)다. 위치(x, y)만 의미 있음.
 - seq / uptime_ms 는 시리얼에 없으므로 bridge 가 생성 (uptime_ms = bridge 시작 후 경과 시간).
@@ -34,6 +40,9 @@ PRED_RE = re.compile(
 BOXES_HEADER = "Object detection bounding boxes:"
 BOX_RE = re.compile(
     r"^\s*(.+?) \((\d+(?:\.\d+)?)\) \[ x: (\d+), y: (\d+), width: (\d+), height: (\d+) \]\s*$")
+SCORES_HEADER = "Predictions:"
+SCORE_RE = re.compile(r"^\s*([A-Za-z0-9_.-]+): (\d+(?:\.\d+)?)\s*$")
+DEFAULT_CLASS_FACE_LABELS = ("face_present",)
 NUM_RE = re.compile(r"-?\d+(?:\.\d+)?")
 
 
@@ -53,6 +62,7 @@ class Frame:
     classification_ms: int
     t_host: float
     boxes: list[Box] = field(default_factory=list)
+    scores: dict[str, float] = field(default_factory=dict)  # classification models
 
 
 class SerialParser:
@@ -60,6 +70,7 @@ class SerialParser:
         self.log = log
         self.current: Frame | None = None
         self.in_boxes = False
+        self.in_scores = False
         self.ignored = 0
         self.suspicious = 0
         self.parse_failures = 0
@@ -88,6 +99,15 @@ class SerialParser:
         if line == BOXES_HEADER:
             self.in_boxes = self.current is not None
             return None
+        if line == SCORES_HEADER:
+            self.in_scores = self.current is not None
+            return None
+        if self.in_scores:
+            m = SCORE_RE.match(line)
+            if m:
+                self.current.scores[m[1]] = float(m[2])
+                return None
+            self.in_scores = False  # e.g. "Face presence: ..." summary line ends the block
 
         m = BOX_RE.match(line)
         if m and self.current is not None and self.in_boxes:
@@ -101,7 +121,7 @@ class SerialParser:
         return None
 
     def flush(self) -> Frame | None:
-        done, self.current, self.in_boxes = self.current, None, False
+        done, self.current, self.in_boxes, self.in_scores = self.current, None, False, False
         return done
 
     def _fail(self, line: str):
@@ -129,10 +149,16 @@ class Bridge:
         self.last_t: float | None = None
 
     def handle(self, frame: Frame):
-        boxes = [b for b in frame.boxes if not self.face_labels or b.label in self.face_labels]
-        best = max(boxes, key=lambda b: b.conf, default=None)
-        conf = _clamp01(best.conf) if best else 0
-        face = best is not None and conf >= self.threshold  # 계약: raw == (confidence >= threshold)
+        if frame.scores:  # classification: no boxes, score of the face label
+            labels = self.face_labels or set(DEFAULT_CLASS_FACE_LABELS)
+            conf = _clamp01(max((v for k, v in frame.scores.items() if k in labels), default=0))
+            best = None
+            face = conf >= self.threshold
+        else:
+            boxes = [b for b in frame.boxes if not self.face_labels or b.label in self.face_labels]
+            best = max(boxes, key=lambda b: b.conf, default=None)
+            conf = _clamp01(best.conf) if best else 0
+            face = best is not None and conf >= self.threshold  # 계약: raw == (confidence >= threshold)
         uptime_ms = max(int((frame.t_host - self.start) * 1000), 0)
         det = {
             "schema_version": common.SCHEMA_VERSION, "device_id": self.device_id, "seq": self.det_seq,
@@ -142,7 +168,7 @@ class Bridge:
             "threshold": self.threshold,
             "inference_ms": frame.classification_ms,
         }
-        if face:
+        if face and best is not None:
             det["bbox"] = {
                 "x": _clamp01(best.x / self.input_w), "y": _clamp01(best.y / self.input_h),
                 "w": _clamp01(best.w / self.input_w), "h": _clamp01(best.h / self.input_h)}
@@ -168,7 +194,8 @@ def main():
     p.add_argument("--model-id", default=common.DEFAULT_MODEL_ID)
     p.add_argument("--input-width", type=int, required=True)
     p.add_argument("--input-height", type=int, required=True)
-    p.add_argument("--face-label", action="append", help="얼굴로 볼 라벨 (기본: 모든 라벨)")
+    p.add_argument("--face-label", action="append",
+                   help="얼굴로 볼 라벨 (기본: object detection 은 모든 라벨, classification 은 face_present)")
     p.add_argument("--threshold", type=float, default=0.6, help="raw_face_detected 판정 임계값 (모델 원래 기준 0.6)")
     p.add_argument("--mqtt-host", default="localhost")
     p.add_argument("--mqtt-port", type=int, default=common.MQTT_PORT)

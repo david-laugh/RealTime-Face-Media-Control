@@ -3,9 +3,12 @@
 Rules (face presence only):
     raw_face_detected=true  -> PLAY   (only if not already PLAY)
     raw_face_detected=false -> PAUSE  (only if not already PAUSE)
-Optional debounce per direction (DebounceRule): a switch happens only after the
-new value has been seen in min_count consecutive detections spanning at least
-min_ms. A detection agreeing with the current command cancels the candidate.
+Optional debounce per direction (DebounceRule): a switch happens on a detection
+when the new value has been seen in min_count consecutive detections AND at least
+min_ms have passed since the last detection that supported the current command
+(e.g. PAUSE after "no face for min_ms since the last face", the hold rule used by
+services/model-benchmark analyzer). A detection agreeing with the current command
+cancels the candidate.
 The default rule (1 detection, 0 ms) switches immediately (mock demo behavior).
 Fail-safe PAUSE on device timeout, device offline and broker disconnect is never
 debounced and also discards any pending candidate.
@@ -61,7 +64,7 @@ class DebounceRule:
     """When a candidate command is confirmed. Default = immediately."""
 
     min_count: int = 1  # consecutive detections agreeing with the candidate
-    min_ms: int = 0  # time from the first to the confirming detection (gateway clock)
+    min_ms: int = 0  # since the last detection supporting the current command (gateway clock)
 
     def __post_init__(self) -> None:
         if self.min_count < 1 or self.min_ms < 0:
@@ -91,6 +94,8 @@ class DeviceState:
     pending_command: Optional[str] = None
     pending_count: int = 0
     pending_since_mono_ms: Optional[int] = None
+    # Last detection that agreed with `command` (None after startup / fail-safe).
+    support_mono_ms: Optional[int] = None
 
 
 class StateManager:
@@ -132,6 +137,7 @@ class StateManager:
 
         target = PLAY if det.raw_face_detected else PAUSE
         if target == dev.command:
+            dev.support_mono_ms = now
             if dev.pending_command is not None:
                 log.info("[%s] %s candidate cancelled after %d detection(s)",
                          dev.device_id, dev.pending_command, dev.pending_count)
@@ -145,13 +151,16 @@ class StateManager:
         dev.pending_count += 1
 
         rule = self.play_debounce if target == PLAY else self.pause_debounce
-        held_ms = now - dev.pending_since_mono_ms
+        anchor = dev.support_mono_ms if dev.support_mono_ms is not None else dev.pending_since_mono_ms
+        held_ms = now - anchor
         if dev.pending_count < rule.min_count or held_ms < rule.min_ms:
             log.info("[%s] %s candidate %d/%d detection(s), %d/%d ms",
                      dev.device_id, target, dev.pending_count, rule.min_count, held_ms, rule.min_ms)
             return None
         reason = FACE_PRESENT if target == PLAY else FACE_ABSENT
-        return self._transition(dev, target, reason, det.source)
+        msg = self._transition(dev, target, reason, det.source)
+        dev.support_mono_ms = now
+        return msg
 
     def handle_status(self, status: DeviceStatus) -> Optional[dict[str, Any]]:
         dev = self._device(status.device_id)
@@ -251,6 +260,7 @@ class StateManager:
         if dev.command == command:
             return None  # no duplicate PLAY/PAUSE
         self._clear_pending(dev)
+        dev.support_mono_ms = None  # detection transitions set it again right after
         dev.command = command
         dev.reason = reason
         dev.command_source = source
