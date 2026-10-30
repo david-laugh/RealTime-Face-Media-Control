@@ -70,7 +70,7 @@ smart-youtube-face-control/
 2. `raw_face_detected` true/false
 3. MQTT publish → `smart-media/{device_id}/detection`
 4. Mosquitto Broker → Control Gateway (subscribe)
-5. Control Gateway 상태 판단 (true → PLAY, false/timeout/offline → PAUSE) → WebSocket `ws://<host>:8000/ws/media`
+5. Control Gateway 상태 판단 (true → PLAY, false/timeout/offline → PAUSE) → WebSocket `ws://<host>:8000/ws`
 6. Web UI → YouTube IFrame API → PLAY / PAUSE
 
 | Channel | Topic / Endpoint | Schema |
@@ -108,12 +108,14 @@ curl http://localhost:8000/api/state
 pip install paho-mqtt==2.1.0
 python scripts/mock_publisher.py --host localhost --device-id xiao-01
 
-# 3. WebSocket 확인: ws://localhost:8000/ws/media 에 연결하면 PLAY/PAUSE 메시지 수신
+# 3. Web UI: docker compose up -d --build web-ui -> http://localhost:8080 -> 시작하기 클릭
+#    (Gateway WebSocket: ws://localhost:8000/ws)
 
 # 4. 테스트
 pip install -r services/control-gateway/requirements-dev.txt
 (cd services/control-gateway && pytest -q)
 python scripts/integration_test.py --broker-restart
+python scripts/webui_e2e_test.py      # 실제 web-ui + YouTube (headless Chrome)
 ```
 
 - 구현 상세: [`docs/implementation.md`](docs/implementation.md)

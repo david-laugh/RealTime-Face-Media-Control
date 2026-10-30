@@ -16,7 +16,7 @@ XIAO ESP32S3 Sense가 얼굴 존재 여부(`raw_face_detected`)를 MQTT로 발�
 | A | Firmware (Mock Detection → MQTT) | `firmware/xiao-esp32s3-sense/smart_media/` | XIAO ESP32S3 (Arduino) | 구현, 컴파일 검증 (실기기 미검증) |
 | B | mqtt-broker (Mosquitto 2) | `services/mqtt-broker/` | Docker | 구현, 검증 |
 | B | control-gateway (FastAPI) | `services/control-gateway/` | Docker | 구현, 검증 |
-| C | web-ui (YouTube IFrame API) | `services/web-ui/` | Docker → Browser | C 담당 (skeleton) |
+| C | web-ui (YouTube IFrame API) | `services/web-ui/` | Docker → Browser | C 담당 (PR #1), Gateway 연동 검증 완료 |
 | D | model-benchmark | `services/model-benchmark/` | Docker (profile `benchmark`) | D 담당 (skeleton) |
 
 ## 3. 데이터 흐름
@@ -40,7 +40,7 @@ flowchart LR
 
     XIAO -- "MQTT detection (10 s) / status (LWT)<br/>host LAN IP:1883" --> BROKER
     BROKER -- "smart-media/+/detection<br/>smart-media/+/status" --> GW
-    GW -- "ws://host:8000/ws/media<br/>media_control" --> YT
+    GW -- "ws://host:8000/ws<br/>media_control" --> YT
     WEB -. "static page" .-> YT
     BROKER -. "detection / telemetry" .-> BENCH
 ```
@@ -55,13 +55,13 @@ sequenceDiagram
     X->>B: status {online:true} (retain) + LWT {online:false}
     X->>B: detection {raw_face_detected:true, seq:1}
     B->>G: detection
-    G->>W: media_control PLAY / FACE_PRESENT
+    G->>W: media_control PLAY / FRONT_FACE_PRESENT
     Note over X: 10 s (millis timer)
     X->>B: detection {raw_face_detected:false, seq:2}
     B->>G: detection
     G->>W: media_control PAUSE / FACE_ABSENT
     Note over G: 25 s 동안 detection 없으면
-    G->>W: media_control PAUSE / DEVICE_TIMEOUT
+    G->>W: media_control PAUSE / DEVICE_TIMEOUT (카메라 끊김)
 ```
 
 ## 4. MQTT Broker와 Gateway를 분리한 이유
@@ -83,7 +83,7 @@ sequenceDiagram
 - Network 이름: `smart-media-network` (bridge)
 - Gateway → Broker: Docker DNS `mqtt-broker:1883`
 - ESP32 → Broker: **Host PC의 LAN IP:1883** (Docker 내부 이름 사용 불가)
-- Browser → Gateway: `ws://<host>:8000/ws/media`
+- Browser → Gateway: `ws://<host>:8000/ws` (별칭 `/ws/media`)
 
 ## 6. 병목 분석
 

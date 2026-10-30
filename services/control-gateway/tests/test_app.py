@@ -46,12 +46,12 @@ def test_health_and_state(client):
 
 def test_ws_snapshot_and_broadcast_to_multiple_clients(client):
     with client.websocket_connect("/ws/media") as ws1, client.websocket_connect("/ws/media") as ws2:
-        assert ws1.receive_json()["reason"] == "SYSTEM_STARTUP"
-        assert ws2.receive_json()["reason"] == "SYSTEM_STARTUP"
+        assert ws1.receive_json()["detail"] == "SYSTEM_STARTUP"
+        assert ws2.receive_json()["detail"] == "SYSTEM_STARTUP"
         inject(client, detection(True, 1))
         for ws in (ws1, ws2):
             msg = ws.receive_json()
-            assert (msg["command"], msg["reason"], msg["source"]) == ("PLAY", "FACE_PRESENT", "mock")
+            assert (msg["command"], msg["detail"], msg["source"]) == ("PLAY", "FACE_PRESENT", "mock")
         assert client.get("/health").json()["websocket_clients"] == 2
     assert client.get("/health").json()["websocket_clients"] == 0
 
@@ -72,7 +72,7 @@ def test_t08_reconnect_gets_current_state(client):
     inject(client, detection(True, 1))
     with client.websocket_connect("/ws/media") as ws:
         msg = ws.receive_json()
-        assert (msg["command"], msg["reason"]) == ("PLAY", "FACE_PRESENT")
+        assert (msg["command"], msg["detail"]) == ("PLAY", "FACE_PRESENT")
 
 
 def test_offline_status_and_broker_disconnect(client):
@@ -80,8 +80,14 @@ def test_offline_status_and_broker_disconnect(client):
     with client.websocket_connect("/ws/media") as ws:
         ws.receive_json()
         inject(client, MqttEvent("message", "smart-media/xiao-01/status", status_payload(False)))
-        assert ws.receive_json()["reason"] == "DEVICE_OFFLINE"
+        assert ws.receive_json()["detail"] == "DEVICE_OFFLINE"
         inject(client, detection(True, 2))
         assert ws.receive_json()["command"] == "PLAY"
         inject(client, MqttEvent("disconnected"))
-        assert ws.receive_json()["reason"] == "BROKER_DISCONNECTED"
+        assert ws.receive_json()["detail"] == "BROKER_DISCONNECTED"
+
+
+def test_web_ui_path_ws_alias(client):
+    with client.websocket_connect("/ws") as ws:
+        msg = ws.receive_json()
+        assert (msg["command"], msg["reason"], msg["detail"]) == ("PAUSE", "UNKNOWN", "SYSTEM_STARTUP")

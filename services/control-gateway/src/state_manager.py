@@ -22,12 +22,23 @@ log = logging.getLogger("gateway.state")
 PLAY = "PLAY"
 PAUSE = "PAUSE"
 
+# Gateway-internal causes, sent to the browser as "detail".
 FACE_PRESENT = "FACE_PRESENT"
 FACE_ABSENT = "FACE_ABSENT"
 DEVICE_TIMEOUT = "DEVICE_TIMEOUT"
 DEVICE_OFFLINE = "DEVICE_OFFLINE"
 BROKER_DISCONNECTED = "BROKER_DISCONNECTED"
 SYSTEM_STARTUP = "SYSTEM_STARTUP"
+
+# "reason" values understood by web-ui (services/web-ui/public/index.html).
+UI_REASON = {
+    FACE_PRESENT: "FRONT_FACE_PRESENT",
+    FACE_ABSENT: "FACE_ABSENT",
+    DEVICE_TIMEOUT: "DEVICE_TIMEOUT",
+    DEVICE_OFFLINE: "DEVICE_TIMEOUT",  # web-ui: "카메라 끊김"
+    BROKER_DISCONNECTED: "UNKNOWN",
+    SYSTEM_STARTUP: "UNKNOWN",
+}
 
 SYSTEM_SOURCE = "system"
 
@@ -46,6 +57,7 @@ class DeviceState:
     command: str = PAUSE
     reason: str = SYSTEM_STARTUP
     face_detected: Optional[bool] = None
+    confidence: Optional[float] = None
     command_source: str = SYSTEM_SOURCE
     last_source: Optional[str] = None  # source of the last device message (e.g. "mock")
     online: Optional[bool] = None
@@ -82,6 +94,7 @@ class StateManager:
         dev.last_seq = det.seq
         dev.last_source = det.source
         dev.face_detected = det.raw_face_detected
+        dev.confidence = det.confidence
         dev.last_detection_mono_ms = self._mono_ms()
         dev.last_detection_ts_ms = self._wall_ms()
         dev.timed_out = False
@@ -99,6 +112,7 @@ class StateManager:
             # online alone never triggers PLAY; a detection is required.
             return None
         dev.face_detected = None
+        dev.confidence = None
         return self._transition(dev, PAUSE, DEVICE_OFFLINE, SYSTEM_SOURCE)
 
     def check_timeouts(self) -> list[dict[str, Any]]:
@@ -110,6 +124,7 @@ class StateManager:
             if now - dev.last_detection_mono_ms >= self.device_timeout_ms:
                 dev.timed_out = True
                 dev.face_detected = None
+                dev.confidence = None
                 log.warning(
                     "[%s] no detection for %d ms (last source=%s)",
                     dev.device_id, now - dev.last_detection_mono_ms, dev.last_source,
@@ -123,6 +138,7 @@ class StateManager:
         out: list[dict[str, Any]] = []
         for dev in self._devices.values():
             dev.face_detected = None
+            dev.confidence = None
             msg = self._transition(dev, PAUSE, BROKER_DISCONNECTED, SYSTEM_SOURCE)
             if msg:
                 out.append(msg)
@@ -143,6 +159,7 @@ class StateManager:
                 "command": dev.command,
                 "reason": dev.reason,
                 "face_detected": dev.face_detected,
+                "confidence": dev.confidence,
                 "command_source": dev.command_source,
                 "last_source": dev.last_source,
                 "online": dev.online,
@@ -183,8 +200,10 @@ class StateManager:
             "type": "media_control",
             "device_id": dev.device_id,
             "command": dev.command,
-            "reason": dev.reason,
+            "reason": UI_REASON[dev.reason],
+            "detail": dev.reason,
             "face_detected": dev.face_detected,
+            "confidence": dev.confidence,
             "source": dev.command_source,
             "ts_server_ms": ts_ms,
         }

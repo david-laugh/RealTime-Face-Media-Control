@@ -9,6 +9,7 @@ Run:
     python scripts/integration_test.py                    # T01-T08, T10, LWT
     python scripts/integration_test.py --broker-restart   # + T09 (restarts mqtt-broker container)
 
+Connects to the same WebSocket path as web-ui (/ws).
 Uses its own device id (default it-xiao-01) so it does not disturb a real xiao-01.
 Prints PASS/FAIL per test and exits non-zero on any failure.
 """
@@ -106,13 +107,27 @@ def record(test_id: str, ok: bool, detail: str) -> None:
     print(f"[{status}] {test_id}: {detail}", flush=True)
 
 
-def expect_cmd(ws: WsListener, command: str, reason: str, timeout: float = 3.0):
+# web-ui display reason for each gateway detail (contracts/websocket/media-control.schema.json)
+UI_REASON = {
+    "FACE_PRESENT": "FRONT_FACE_PRESENT",
+    "FACE_ABSENT": "FACE_ABSENT",
+    "DEVICE_TIMEOUT": "DEVICE_TIMEOUT",
+    "DEVICE_OFFLINE": "DEVICE_TIMEOUT",
+    "BROKER_DISCONNECTED": "UNKNOWN",
+    "SYSTEM_STARTUP": "UNKNOWN",
+}
+
+
+def expect_cmd(ws: WsListener, command: str, detail: str, timeout: float = 3.0):
     t0 = time.monotonic()
     ts, msg = ws.get(timeout)
     if msg is None:
         return False, f"no message within {timeout}s", None
-    ok = msg["command"] == command and msg["reason"] == reason
-    return ok, f"got {msg['command']}/{msg['reason']} source={msg['source']} face={msg['face_detected']} after {ts - t0:.3f}s", msg
+    ok = msg["command"] == command and msg["detail"] == detail and msg["reason"] == UI_REASON[detail]
+    return ok, (
+        f"got {msg['command']} reason={msg['reason']} detail={msg['detail']} "
+        f"source={msg['source']} face={msg['face_detected']} after {ts - t0:.3f}s"
+    ), msg
 
 
 # ---- tests -------------------------------------------------------------
@@ -181,7 +196,7 @@ def run(args) -> int:
     ws2.close()
     record(
         "T08 WebSocket reconnect sync",
-        bool(snap) and snap["command"] == "PLAY" and snap["reason"] == "FACE_PRESENT",
+        bool(snap) and snap["command"] == "PLAY" and snap["detail"] == "FACE_PRESENT",
         f"snapshot on connect: {snap}",
     )
 
@@ -212,8 +227,8 @@ def run(args) -> int:
     t0 = time.monotonic()
     ts, msg = ws.get(timeout_s + 5)
     elapsed = (ts - t0) if ts else None
-    ok = bool(msg) and msg["reason"] == "DEVICE_TIMEOUT" and msg["command"] == "PAUSE" and timeout_s <= elapsed + 0.5 <= timeout_s + 3
-    record("T05 no detection -> DEVICE_TIMEOUT", ok, f"{msg and msg['command']}/{msg and msg['reason']} after {elapsed and round(elapsed, 2)}s (timeout={timeout_s}s)")
+    ok = bool(msg) and msg["detail"] == "DEVICE_TIMEOUT" and msg["command"] == "PAUSE" and timeout_s <= elapsed + 0.5 <= timeout_s + 3
+    record("T05 no detection -> DEVICE_TIMEOUT", ok, f"{msg and msg['command']}/{msg and msg['detail']} after {elapsed and round(elapsed, 2)}s (timeout={timeout_s}s)")
 
     # T10: 10 s periodic alternating input, no timeout.
     seen = []
@@ -223,7 +238,7 @@ def run(args) -> int:
         while (remaining := deadline - time.monotonic()) > 0:
             _, msg = ws.get(remaining)
             if msg:
-                seen.append(f"{msg['command']}/{msg['reason']}")
+                seen.append(f"{msg['command']}/{msg['detail']}")
     expected = ["PLAY/FACE_PRESENT", "PAUSE/FACE_ABSENT"] * (args.periodic_count // 2)
     record(
         f"T10 {args.interval:.0f}s periodic x{args.periodic_count}, no timeout",
@@ -276,7 +291,7 @@ def main() -> None:
     ap.add_argument("--mqtt-host", default="localhost")
     ap.add_argument("--mqtt-port", type=int, default=1883)
     ap.add_argument("--gateway", default="http://localhost:8000")
-    ap.add_argument("--ws", default="ws://localhost:8000/ws/media")
+    ap.add_argument("--ws", default="ws://localhost:8000/ws", help="web-ui default path; /ws/media is an alias")
     ap.add_argument("--device-id", default="it-xiao-01")
     ap.add_argument("--interval", type=float, default=10.0, help="T10 publish interval (s)")
     ap.add_argument("--periodic-count", type=int, default=4)

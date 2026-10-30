@@ -17,7 +17,7 @@ def test_startup_is_pause(clock):
     sm = make(clock)
     [snap] = sm.snapshot_messages()
     assert snap["command"] == "PAUSE"
-    assert snap["reason"] == "SYSTEM_STARTUP"
+    assert snap["detail"] == "SYSTEM_STARTUP"
     assert snap["face_detected"] is None
     assert snap["source"] == "system"
 
@@ -25,7 +25,9 @@ def test_startup_is_pause(clock):
 def test_t01_true_plays(clock):
     msg = make(clock).handle_detection(det(True))
     assert msg["command"] == "PLAY"
-    assert msg["reason"] == "FACE_PRESENT"
+    assert msg["detail"] == "FACE_PRESENT"
+    assert msg["reason"] == "FRONT_FACE_PRESENT"  # web-ui enum
+    assert msg["confidence"] is None
     assert msg["face_detected"] is True
     assert msg["source"] == "mock"
     assert msg["ts_server_ms"] == 1793320123456
@@ -36,7 +38,7 @@ def test_t02_false_pauses(clock):
     sm.handle_detection(det(True, 1))
     msg = sm.handle_detection(det(False, 2))
     assert msg["command"] == "PAUSE"
-    assert msg["reason"] == "FACE_ABSENT"
+    assert msg["detail"] == "FACE_ABSENT"
     assert msg["face_detected"] is False
 
 
@@ -64,7 +66,7 @@ def test_t05_timeout_pauses_once(clock):
     clock.advance(1)
     [msg] = sm.check_timeouts()
     assert msg["command"] == "PAUSE"
-    assert msg["reason"] == "DEVICE_TIMEOUT"
+    assert msg["detail"] == "DEVICE_TIMEOUT"
     assert msg["face_detected"] is None
     assert msg["source"] == "system"
     clock.advance(10000)
@@ -87,7 +89,8 @@ def test_t06_offline_pauses(clock):
     sm.handle_detection(det(True))
     msg = sm.handle_status(parse_status(status_payload(False), "xiao-01"))
     assert msg["command"] == "PAUSE"
-    assert msg["reason"] == "DEVICE_OFFLINE"
+    assert msg["detail"] == "DEVICE_OFFLINE"
+    assert msg["reason"] == "DEVICE_TIMEOUT"  # web-ui: "카메라 끊김"
     assert msg["face_detected"] is None
 
 
@@ -114,7 +117,7 @@ def test_broker_disconnect_pauses(clock):
     sm.handle_detection(det(True))
     [msg] = sm.handle_broker_disconnected()
     assert msg["command"] == "PAUSE"
-    assert msg["reason"] == "BROKER_DISCONNECTED"
+    assert msg["detail"] == "BROKER_DISCONNECTED"
     assert sm.handle_broker_disconnected() == []
 
 
@@ -125,3 +128,9 @@ def test_devices_are_independent(clock):
     assert msg["device_id"] == "xiao-02" and msg["command"] == "PLAY"
     sm.handle_detection(det(False, 2, "xiao-02"))
     assert sm.state_dict()["devices"]["xiao-01"]["command"] == "PLAY"
+
+
+def test_confidence_passed_through_from_real_model(clock):
+    sm = make(clock)
+    real = parse_detection(detection_payload(True, 1, confidence=0.84, inference_ms=700), "xiao-01")
+    assert sm.handle_detection(real)["confidence"] == 0.84

@@ -1,6 +1,6 @@
 # Demo Test Report (A/B Mock Demo)
 
-실행일: 2026-10-30 (KST 11:06–11:10)
+실행일: 2026-10-30 (1차 KST 11:06–11:10, web-ui 연동 2차 KST 11:20–11:30)
 
 > 원칙: 실제로 실행한 항목만 PASS/FAIL로 기록합니다. 실행하지 않은 항목은 `NOT_RUN`입니다.
 
@@ -109,13 +109,13 @@ T09 Gateway 로그:
 
 ### 3.4 자동화 테스트 (pytest, broker 불필요)
 
-`services/control-gateway/tests/` — **50 passed** (0.66s)
+`services/control-gateway/tests/` — 1차 **50 passed**, web-ui 연동 수정 후 2차 **54 passed** (0.37s)
 
 | 파일 | 내용 |
 |------|------|
 | `test_state_manager.py` | T01–T06, T10을 가짜 시계로 검증, broker disconnect, 장치 독립성 |
 | `test_messages.py` | T07: 깨진 JSON, 타입 불일치, 필수 필드 누락, topic/device_id 불일치 |
-| `test_contracts.py` | 4개 Schema Draft 2020-12 유효성 + example 검증, Gateway 출력이 WS Schema와 일치 |
+| `test_contracts.py` | 4개 Schema Draft 2020-12 유효성 + example 검증, Gateway 출력이 WS Schema와 일치, **WS reason이 web-ui `REASON` 표에 모두 존재 / web-ui 기본 WS 경로를 Gateway가 제공** (web-ui 파일을 읽기만 함) |
 | `test_app.py` | FastAPI + WebSocket 다중 client broadcast, 재접속 snapshot, retained detection 무시 |
 
 ### 3.5 Arduino Firmware
@@ -142,6 +142,50 @@ T09 Gateway 로그:
 7. 보드 USB 분리 → 최대 keepalive×1.5(약 22초) 내 LWT로 `PAUSE/DEVICE_OFFLINE`, 또는 25초 timeout으로 `DEVICE_TIMEOUT` 확인
 8. 공유기 Wi-Fi 끄기/켜기 또는 `docker compose restart mqtt-broker` → Serial에 재연결 로그, 재연결 직후 detection 즉시 발행 확인 (A08)
 
+### 3.6 Web UI(C) 연동 테스트 (2차)
+
+C 담당 web-ui(PR #1, `services/web-ui/public/index.html`)를 **수정 없이** 검토·실행했습니다.
+
+#### 검토 결과 (수정 전 Gateway와의 불일치)
+
+| # | 불일치 | 수정 전 실제 결과 | 조치 (Gateway 쪽만 수정) |
+|---|--------|-------------------|--------------------------|
+| 1 | web-ui 기본 WS 경로 `/ws`, Gateway는 `/ws/media`만 제공 | `ws://localhost:8000/ws` → **HTTP 403** (연결 불가, 화면 "게이트웨이 끊김") | `/ws` 추가, `/ws/media`는 별칭 유지 |
+| 2 | Gateway reason `FACE_PRESENT` ↔ web-ui `FRONT_FACE_PRESENT` | (코드 검토) 재생은 되지만 화면이 "판단 불가" | `reason`을 web-ui enum으로 출력 |
+| 3 | `DEVICE_OFFLINE`, `BROKER_DISCONNECTED`, `SYSTEM_STARTUP`은 web-ui에 없음 | (코드 검토) 모두 "판단 불가" | OFFLINE → `DEVICE_TIMEOUT`(카메라 끊김), 나머지 → `UNKNOWN`. 세부 원인은 `detail` 필드 |
+| 4 | web-ui가 `confidence` 표시 | 필드 없음 → "-" (문제 없음) | `confidence` 항상 포함 (Mock은 null) |
+
+#### 실제 브라우저 테스트 (`scripts/webui_e2e_test.py`)
+
+환경: Google Chrome headless(DevTools Protocol), `--autoplay-policy=no-user-gesture-required`, web-ui 컨테이너(nginx) `http://localhost:8080/`, 실제 YouTube IFrame Player(기본 영상 `M7lc1UVf-VE`).
+흐름: Python이 MQTT로 `xiao-01` mock payload 발행 → mqtt-broker → control-gateway → `ws://localhost:8000/ws` → web-ui → YouTube.
+페이지 로드 후 "시작하기" 버튼을 1회 클릭(자동재생 정책)하고 DOM 문구와 `player.getPlayerState()`를 읽어 판정했습니다.
+
+| ID | 입력 | 기대 화면 / 플레이어 | 실제 | 결과 |
+|----|------|----------------------|------|------|
+| W0 | 페이지 로드 | 게이트웨이 연결됨 | `게이트웨이 연결됨`, 로그 `연결됨: ws://localhost:8000/ws`, 첫 snapshot "판단 불가"(SYSTEM_STARTUP) | PASS |
+| W1 | detection `true` | 보고 있어요 / PLAYING | `보고 있어요`, PLAYING, `전달 1ms` | PASS |
+| W2 | detection `false` | 자리 비움 / PAUSED | `자리 비움`, PAUSED, 자동 정지 1 | PASS |
+| W3 | detection `true` | 보고 있어요 / PLAYING | 동일 | PASS |
+| W4 | status `online:false` | 카메라 끊김 / PAUSED | `카메라 끊김`, PAUSED, 로그 `PAUSE (DEVICE_TIMEOUT)` | PASS |
+| W5 | 25초 detection 없음 | 카메라 끊김 / PAUSED | 25초 후 `카메라 끊김`, PAUSED | PASS |
+| W6 | `docker compose restart mqtt-broker` | 판단 불가 / PAUSED | `판단 불가`, PAUSED, 로그 `PAUSE (UNKNOWN)` | PASS |
+| W7 | broker 복구 후 `true` | 보고 있어요 / PLAYING | 동일 (web-ui WebSocket은 끊기지 않음) | PASS |
+| W8 | 페이지 새로고침 | 현재 상태 동기화 | 새 연결 직후 `보고 있어요` 표시, 영상은 "시작하기" 대기(CUED) | PASS |
+
+Gateway → 브라우저 전달 지연(web-ui 표시 `전달 Nms`, 같은 PC): 0–35 ms.
+
+#### 회귀 테스트
+
+`scripts/integration_test.py --broker-restart`를 web-ui와 같은 `/ws` 경로로 재실행 → **14/14 PASS**
+(예: `T01 got PLAY reason=FRONT_FACE_PRESENT detail=FACE_PRESENT`, `T06c got PAUSE reason=DEVICE_TIMEOUT detail=DEVICE_OFFLINE`, `T05 DEVICE_TIMEOUT after 25.56s`).
+
+#### 검토 의견 (web-ui는 수정하지 않음, C 담당 참고)
+
+- web-ui는 `device_id`를 필터링하지 않습니다. 같은 Gateway에 다른 장치 메시지(예: `integration_test.py`의 `it-xiao-01`)가 오면 화면이 그 장치를 따라갑니다.
+  → 시연 중에는 `integration_test.py`를 실행하지 말고, 실행했다면 `docker compose restart control-gateway`로 테스트 장치 상태를 지우세요.
+- 화면 문구 "정면 얼굴이 보여서 재생합니다."는 이번 버전(얼굴 존재 여부만 판단)에서는 "얼굴이 보여서"의 의미입니다.
+
 ## 4. 발견된 문제
 
 | # | 문제 | 해결 |
@@ -150,10 +194,12 @@ T09 Gateway 로그:
 | 2 | `.env`에 값 뒤 인라인 주석(`25000  # ...`)이 있으면 파서에 따라 값 일부로 읽힐 위험 | `.env.example`에서 주석을 별도 줄로 이동 |
 | 3 | 테스트 정리 시 retained status를 빈 payload로 삭제하면 Gateway가 invalid message로 기록 | 빈 payload는 조용히 무시하도록 수정 |
 | 4 | Docker Desktop 데몬이 초기에 꺼져 있었음 | Docker Desktop 실행 후 진행 |
+| 5 | web-ui(`/ws`, reason 4종)와 Gateway(`/ws/media`, reason 6종) 규약 불일치 → web-ui 연결 불가 (HTTP 403) | Gateway를 web-ui 규약에 맞춤 (3.6) |
+| 6 | Claude in Chrome 확장 미연결 | 설치된 Chrome을 headless + DevTools Protocol로 직접 구동해 대체 |
 
 ## 5. 남은 작업
 
 - 실기기 테스트 A02–A08
-- C 담당 Web UI와 실제 브라우저/YouTube 연동 테스트 (이번 범위 아님)
+- 사람이 직접 보는 브라우저(헤드리스 아님)에서 실기기 ESP32와 함께 최종 시연 확인
 - Broker 인증, 실제 모델 연동 (`docs/model-integration-guide.md`)
 - healthcheck 요청이 10초마다 broker/gateway 로그에 남음 — 필요 시 로그 레벨 조정

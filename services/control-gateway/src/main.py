@@ -142,6 +142,8 @@ async def api_state() -> dict[str, Any]:
     return {"mqtt_connected": bool(gw.mqtt and gw.mqtt.connected), **gw.state.state_dict()}
 
 
+# "/ws" is the web-ui default (services/web-ui); "/ws/media" kept as an alias.
+@app.websocket("/ws")
 @app.websocket("/ws/media")
 async def ws_media(websocket: WebSocket) -> None:
     gw = _gw(app)

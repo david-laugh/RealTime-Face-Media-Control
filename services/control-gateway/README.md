@@ -5,14 +5,14 @@ Owner: Member B (Backend / IoT) — Python 3.12 · FastAPI · Uvicorn · paho-mq
 MQTT Detection/Status를 구독해 장치별 상태를 관리하고, 변경 시 WebSocket으로 PLAY/PAUSE를 Browser에 push합니다.
 
 ```
-mqtt-broker ──smart-media/+/detection, +/status──▶ control-gateway ──ws /ws/media──▶ web-ui
+mqtt-broker ──smart-media/+/detection, +/status──▶ control-gateway ──ws /ws──▶ web-ui
 ```
 
 ## Endpoint
 
 | Method | Path | 설명 |
 |--------|------|------|
-| WS | `/ws/media` | `media_control` push. 연결 직후 장치별 현재 상태 1회 전송 |
+| WS | `/ws` (web-ui 기본값), `/ws/media` (별칭) | `media_control` push. 연결 직후 장치별 현재 상태 1회 전송. `reason` = web-ui enum, `detail` = 세부 원인 |
 | GET | `/health` | Gateway 상태, `mqtt_connected`, WebSocket client 수, invalid message 수 |
 | GET | `/api/state` | 장치별 command / reason / face_detected / 마지막 detection 경과시간 |
 
@@ -54,6 +54,7 @@ python -m venv .venv && . .venv/bin/activate      # Windows: .venv\Scripts\activ
 pip install -r requirements-dev.txt
 pytest -q                                          # unit + app + contract tests (broker 불필요)
 python ../../scripts/integration_test.py --broker-restart   # Docker 실행 중일 때 E2E
+python ../../scripts/webui_e2e_test.py                      # 실제 web-ui 페이지 + YouTube (headless Chrome)
 ```
 
 결과: [`docs/demo-test.md`](../../docs/demo-test.md)

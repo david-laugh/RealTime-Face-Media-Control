@@ -1,6 +1,8 @@
 """Keep contracts/*.schema.json, the gateway parser and gateway output in sync."""
 
 import json
+import re
+from pathlib import Path
 
 import jsonschema
 import pytest
@@ -60,10 +62,35 @@ def test_gateway_output_matches_ws_schema(load_schema, clock):
     sm.handle_detection(parse_detection(detection_payload(True, 5), "xiao-01"))
     out.extend(sm.handle_broker_disconnected())
 
-    reasons = [m["reason"] for m in out]
-    assert reasons == [
-        "SYSTEM_STARTUP", "FACE_PRESENT", "FACE_ABSENT",
-        "DEVICE_TIMEOUT", "DEVICE_OFFLINE", "BROKER_DISCONNECTED",
+    pairs = [(m["detail"], m["reason"]) for m in out]
+    assert pairs == [
+        ("SYSTEM_STARTUP", "UNKNOWN"),
+        ("FACE_PRESENT", "FRONT_FACE_PRESENT"),
+        ("FACE_ABSENT", "FACE_ABSENT"),
+        ("DEVICE_TIMEOUT", "DEVICE_TIMEOUT"),
+        ("DEVICE_OFFLINE", "DEVICE_TIMEOUT"),
+        ("BROKER_DISCONNECTED", "UNKNOWN"),
     ]
     for msg in out:
         validator.validate(msg)
+
+
+# Reasons handled by services/web-ui/public/index.html (const REASON = {...}).
+WEB_UI_INDEX = Path(__file__).resolve().parents[3] / "services" / "web-ui" / "public" / "index.html"
+
+
+def test_ws_reasons_are_known_to_web_ui(load_schema):
+    html = WEB_UI_INDEX.read_text(encoding="utf-8")
+    block = re.search(r"const REASON = \{(.*?)\};", html, re.S).group(1)
+    web_ui_reasons = set(re.findall(r"^\s*([A-Z_]+):", block, re.M))
+    schema_reasons = set(load_schema("websocket/media-control.schema.json")["properties"]["reason"]["enum"])
+    assert schema_reasons <= web_ui_reasons
+
+
+def test_web_ui_default_ws_path_is_served():
+    import main
+
+    html = WEB_UI_INDEX.read_text(encoding="utf-8")
+    path = re.search(r":8000(/[\w/]*)`", html).group(1)
+    served = {r.path for r in main.app.routes}
+    assert path in served, f"web-ui connects to {path}, gateway serves {served}"

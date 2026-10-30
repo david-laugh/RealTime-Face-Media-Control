@@ -12,7 +12,8 @@
 | B | Mosquitto Broker (Docker, 1883) | 구현, 검증 |
 | B | Control Gateway (FastAPI, MQTT 구독, 상태 관리, timeout, WebSocket, health) | 구현, 검증 |
 | 공통 | MQTT / WebSocket JSON Schema (Draft 2020-12) | 갱신, 자동 검증 |
-| 테스트 | 단위/앱/계약 테스트 50개, E2E 스크립트, PC Mock Publisher | 구현, 실행 |
+| 테스트 | 단위/앱/계약 테스트 54개, E2E 스크립트, 브라우저 E2E(web-ui), PC Mock Publisher | 구현, 실행 |
+| B | web-ui(C) 연동: `/ws` 경로, web-ui reason enum, `detail`/`confidence` 필드 | 구현, 실제 브라우저 검증 |
 
 ## 2. Arduino Firmware
 
@@ -53,7 +54,7 @@ on_disconnect  ─┼─call_soon_──▶   ├─ split_topic / parse_detecti
 on_message     ─┘ threadsafe      ├─ StateManager.handle_*()  → Optional[msg]
                   (asyncio.Queue) └─ ConnectionManager.broadcast(msg)
                                 watch_timeouts(): 1 s 마다 StateManager.check_timeouts()
-                                FastAPI: /health, /api/state, WS /ws/media
+                                FastAPI: /health, /api/state, WS /ws (+ /ws/media)
 ```
 
 - paho 콜백은 이벤트만 큐에 넣고, 상태 변경과 WebSocket 전송은 모두 이벤트 루프 한 곳에서 수행 → lock 없이 상태 일관성 유지.

@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://smart-youtube-face-control/contracts/websocket/media-control.schema.json",
   "title": "WebSocket Media Control Message",
-  "description": "Control Gateway -> Browser at ws://<host>:8000/ws/media. Sent on every state change, and once per device right after a client connects (current state).",
+  "description": "Control Gateway -> Browser (web-ui) at ws://<host>:8000/ws (alias /ws/media). Sent on every state change, and once per device right after a client connects (current state). 'reason' uses the web-ui enum; 'detail' carries the fine-grained gateway cause.",
   "type": "object",
   "required": [
     "schema_version",
@@ -10,7 +10,9 @@
     "device_id",
     "command",
     "reason",
+    "detail",
     "face_detected",
+    "confidence",
     "source",
     "ts_server_ms"
   ],
@@ -29,9 +31,22 @@
     },
     "command": {
       "type": "string",
-      "enum": ["PLAY", "PAUSE"]
+      "enum": [
+        "PLAY",
+        "PAUSE"
+      ]
     },
     "reason": {
+      "type": "string",
+      "enum": [
+        "FRONT_FACE_PRESENT",
+        "FACE_ABSENT",
+        "DEVICE_TIMEOUT",
+        "UNKNOWN"
+      ],
+      "description": "Display reason understood by web-ui. FRONT_FACE_PRESENT means 'face present' in this version (no front/side distinction)."
+    },
+    "detail": {
       "type": "string",
       "enum": [
         "FACE_PRESENT",
@@ -40,15 +55,32 @@
         "DEVICE_OFFLINE",
         "BROKER_DISCONNECTED",
         "SYSTEM_STARTUP"
-      ]
+      ],
+      "description": "Gateway cause. Mapping to reason: FACE_PRESENT->FRONT_FACE_PRESENT, FACE_ABSENT->FACE_ABSENT, DEVICE_TIMEOUT/DEVICE_OFFLINE->DEVICE_TIMEOUT, BROKER_DISCONNECTED/SYSTEM_STARTUP->UNKNOWN."
     },
     "face_detected": {
-      "type": ["boolean", "null"],
+      "type": [
+        "boolean",
+        "null"
+      ],
       "description": "Last known face presence; null when unknown (startup, timeout, offline, broker down)."
+    },
+    "confidence": {
+      "type": [
+        "number",
+        "null"
+      ],
+      "minimum": 0,
+      "maximum": 1,
+      "description": "Detection confidence from a real model; null for mock or system events."
     },
     "source": {
       "type": "string",
-      "enum": ["mock", "edge_impulse", "system"],
+      "enum": [
+        "mock",
+        "edge_impulse",
+        "system"
+      ],
       "description": "Origin of the decision: detection provider, or 'system' for gateway fail-safe events."
     },
     "ts_server_ms": {
@@ -64,8 +96,10 @@
       "type": "media_control",
       "device_id": "xiao-01",
       "command": "PLAY",
-      "reason": "FACE_PRESENT",
+      "reason": "FRONT_FACE_PRESENT",
+      "detail": "FACE_PRESENT",
       "face_detected": true,
+      "confidence": null,
       "source": "mock",
       "ts_server_ms": 1793320123456
     },
@@ -75,7 +109,9 @@
       "device_id": "xiao-01",
       "command": "PAUSE",
       "reason": "FACE_ABSENT",
+      "detail": "FACE_ABSENT",
       "face_detected": false,
+      "confidence": null,
       "source": "mock",
       "ts_server_ms": 1793320133456
     },
@@ -85,9 +121,23 @@
       "device_id": "xiao-01",
       "command": "PAUSE",
       "reason": "DEVICE_TIMEOUT",
+      "detail": "DEVICE_TIMEOUT",
       "face_detected": null,
+      "confidence": null,
       "source": "system",
       "ts_server_ms": 1793320163456
+    },
+    {
+      "schema_version": "1.0",
+      "type": "media_control",
+      "device_id": "xiao-01",
+      "command": "PAUSE",
+      "reason": "DEVICE_TIMEOUT",
+      "detail": "DEVICE_OFFLINE",
+      "face_detected": null,
+      "confidence": null,
+      "source": "system",
+      "ts_server_ms": 1793320173456
     }
   ]
 }
