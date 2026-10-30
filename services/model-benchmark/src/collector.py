@@ -72,9 +72,9 @@ def main():
     p.add_argument("--deploy", default="int8", help="배포 옵션, 예: int8, int8+EON")
     p.add_argument("--esp-nn", default="off", choices=["on", "off"])
     p.add_argument("--color", default="grayscale", choices=["grayscale", "rgb"])
-    p.add_argument("--device-threshold", type=float, default=0.6,
-                   help="기기 FOMO 출력 임계값 (model_variables.h, 2026-10-30 확인값 0.6)")
-    p.add_argument("--bridge-threshold", type=float, default=0.5, help="serial_bridge --threshold 값")
+    p.add_argument("--device-threshold", type=float, default=0.2,
+                   help="기기 FOMO 출력 임계값 (model_variables.h, 원래 0.6 → 스윕용 0.2)")
+    p.add_argument("--bridge-threshold", type=float, default=0.6, help="serial_bridge --threshold 값")
     p.add_argument("--download-date", default="", help="Edge Impulse 라이브러리 다운로드 날짜 YYYY-MM-DD")
     p.add_argument("--lighting", default="", help="조명 설명")
     p.add_argument("--camera-height", default="", help="카메라 높이, 예: 110cm")

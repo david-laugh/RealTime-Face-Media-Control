@@ -19,7 +19,7 @@ docker compose --profile benchmark up -d --build          # broker + benchmark
 # 호스트: 스케치 업로드 후 (bench-sketch/README.md)
 pip install -r services/model-benchmark/requirements.txt  # Python 3.12 권장
 python services/model-benchmark/src/serial_bridge.py --port COM5 --baud 115200 \
-    --input-width 96 --input-height 96 --threshold 0.5
+    --input-width 96 --input-height 96 --threshold 0.6
 # 케이스별 수집 (기본 120초)
 docker compose exec model-benchmark python src/collector.py --case face-50-normal --operator NM \
     --download-date 2026-10-30 --camera-height 110cm --camera-position "모니터 상단"
@@ -27,7 +27,9 @@ docker compose exec model-benchmark python src/analyzer.py --date 20261030
 ```
 
 `--operator`는 이니셜/별칭만 사용하세요. 측정 조건 기본값: `--esp-nn off --color grayscale
---device-threshold 0.6 --bridge-threshold 0.5` (기기 값은 `bench-sketch/README.md` 참고, 바꿨으면 명시).
+--device-threshold 0.2 --bridge-threshold 0.6` (바꿨으면 명시).
+기기 출력 임계값은 모델 원래 기본값 0.6을 임계값 스윕을 위해 0.2로 낮춘 값이고, 판정 임계값은 원래 기준 0.6을 유지합니다.
+빌드 환경: ESP32 보드 패키지 3.3.12. ESP-NN은 첫 추론 크래시로 off (3.x 호환 문제일 수 있어 2.0.x 재검증 필요).
 
 ### 측정 조건 정의
 
@@ -36,7 +38,8 @@ docker compose exec model-benchmark python src/analyzer.py --date 20261030
 
 ### 판정/지표 규칙
 
-- 프레임마다 최고 confidence 박스 사용. 박스 없음 → `confidence=0`, `bbox=null`.
+- `source`: serial_bridge = `edge_impulse`, mock = `mock` (mock은 confidence/inference_ms/bbox 미전송).
+- 프레임마다 최고 confidence 박스 사용. 박스 없음 → `confidence=0`, `bbox` 필드 생략.
 - `raw_face_detected` = confidence ≥ bridge `--threshold`. 기기는 출력 임계값(`--device-threshold`) 이상 박스를 모두 출력하므로
   analyzer 임계값 스윕(0.3~0.9)은 저장된 confidence로 계산합니다.
 - `bbox`: FOMO는 중심점 검출 모델이라 width/height는 얼굴 크기가 아니라 **출력 격자 셀 크기**입니다.
@@ -49,8 +52,8 @@ docker compose exec model-benchmark python src/analyzer.py --date 20261030
 ```bash
 docker compose --profile benchmark up -d --build
 docker compose exec -d model-benchmark python src/mock_publisher.py --mode alternate --period 5
-docker compose exec model-benchmark python src/collector.py --model-id mock-model --label FACE --distance 50cm --env NORMAL --duration 20  # mock은 짧게
-docker compose exec model-benchmark python src/analyzer.py --model-id mock-model
+docker compose exec model-benchmark python src/collector.py --model-id mock-v1 --label FACE --distance 50cm --env NORMAL --duration 20  # mock은 짧게
+docker compose exec model-benchmark python src/analyzer.py --model-id mock-v1
 ```
 
 gateway/web-ui 테스트용으로만 쓰려면 mock_publisher만 실행하면 됩니다
