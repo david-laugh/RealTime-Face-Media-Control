@@ -1,0 +1,33 @@
+{
+  "session_id": "061728_FACE_CENTER_50cm_NORMAL",
+  "model_id": "ei-541658-fomo01-int8",
+  "device_id": "xiao-bench-01",
+  "case_id": "face-50-normal",
+  "label": "FACE",
+  "position": "CENTER",
+  "distance": "50cm",
+  "env": "NORMAL",
+  "expected_face": true,
+  "duration_s": 30.0,
+  "operator": "NY",
+  "start_delay_s": 10.0,
+  "deploy": "int8+EON",
+  "board_pkg": "2.0.17",
+  "esp_nn": "on",
+  "color": "grayscale",
+  "device_threshold": 0.2,
+  "bridge_threshold": 0.6,
+  "download_date": "2026-10-30",
+  "lighting": "실내 천장등",
+  "camera_height": "40cm",
+  "camera_position": "모니터 상단 중앙",
+  "notes": "",
+  "started_at": "2026-10-30T06:17:38",
+  "ended_at": "2026-10-30T06:18:08",
+  "counts": {
+    "detection": 137,
+    "telemetry": 137,
+    "invalid": 0,
+    "dropped_before_start": 93
+  }
+}
