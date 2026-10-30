@@ -8,7 +8,8 @@
 //
 // To integrate a real model, write a class with the same public methods
 // (begin / detect / source / modelId), e.g. EdgeImpulseDetectionProvider,
-// and change the provider type in smart_media.ino.
+// and change the provider type in smart_media.ino. A real provider must fill
+// confidence on every frame (and threshold if used); see DetectionResult.h.
 class MockDetectionProvider {
  public:
   bool begin();

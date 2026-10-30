@@ -93,6 +93,17 @@ bool MqttPublisher::publishDetection(uint32_t seq, uint32_t uptimeMs, const char
     return false;
   }
 
+  // The gateway rejects these, so drop them here and say why on Serial.
+  const bool isMock = strcmp(source_, "mock") == 0;
+  if (isMock && (result.hasConfidence || result.hasThreshold || result.hasInferenceMs)) {
+    Serial.println("[MQTT] Contract violation: mock must not send model fields, dropped");
+    return false;
+  }
+  if (!isMock && !result.hasConfidence) {
+    Serial.println("[MQTT] Contract violation: model result without confidence, dropped");
+    return false;
+  }
+
   char payload[320];
   int len = snprintf(payload, sizeof(payload),
                      "{\"schema_version\":\"1.0\",\"device_id\":\"%s\",\"seq\":%lu,"
@@ -102,9 +113,14 @@ bool MqttPublisher::publishDetection(uint32_t seq, uint32_t uptimeMs, const char
                      result.faceDetected ? "true" : "false");
 
   // Optional fields: only present when the provider actually measured them.
+  // confidence 0 is a real value ("no valid face score") and is printed as 0.000.
   if (result.hasConfidence && len > 0 && len < (int)sizeof(payload)) {
     len += snprintf(payload + len, sizeof(payload) - len, ",\"confidence\":%.3f",
                     result.confidence);
+  }
+  if (result.hasThreshold && len > 0 && len < (int)sizeof(payload)) {
+    len += snprintf(payload + len, sizeof(payload) - len, ",\"threshold\":%.3f",
+                    result.threshold);
   }
   if (result.hasInferenceMs && len > 0 && len < (int)sizeof(payload)) {
     len += snprintf(payload + len, sizeof(payload) - len, ",\"inference_ms\":%lu",

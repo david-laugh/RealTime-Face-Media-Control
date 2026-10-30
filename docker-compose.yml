@@ -46,6 +46,11 @@ services:
       MQTT_TOPIC_PREFIX: ${MQTT_TOPIC_PREFIX:-smart-media}
       DEFAULT_DEVICE_ID: ${DEVICE_ID:-xiao-01}
       DEVICE_TIMEOUT_MS: ${DEVICE_TIMEOUT_MS:-25000}
+      # Debounce (default 1 / 0 = off, switch on every detection). Set after the model benchmark.
+      PLAY_CONFIRM_COUNT: ${PLAY_CONFIRM_COUNT:-1}
+      PLAY_CONFIRM_MS: ${PLAY_CONFIRM_MS:-0}
+      PAUSE_CONFIRM_COUNT: ${PAUSE_CONFIRM_COUNT:-1}
+      PAUSE_CONFIRM_MS: ${PAUSE_CONFIRM_MS:-0}
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
     ports:
       - "${GATEWAY_PORT:-8000}:8000"
