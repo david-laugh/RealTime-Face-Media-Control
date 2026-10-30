@@ -32,6 +32,19 @@ Edge Impulse 라이브러리는 커밋하지 않습니다 (`.gitignore`). 아래
 - ESP32 보드 패키지 (Boards Manager `esp32`) 버전: **3.3.12**
 - ESP-NN 크래시(Guru Meditation StoreProhibited)는 보드 패키지 3.x 호환 문제일 수 있음 → 2.0.x 에서 ESP-NN on 재검증 필요
 
+## 스케치 선택 (보드 패키지별) — 가설, 검증 전
+
+| 파일 | 보드 패키지 | `ei_camera_get_data()` 색상 순서 | ESP-NN (`ei_classifier_config.h`) |
+|------|-------------|-------------------------------|------------------------------------|
+| `esp32_camera_xiao.ino` | esp32 **3.x** (측정: 3.3.12) | 수정 순서 `[ix] << 16 ... [ix + 2]` (스왑 제거) | `0` (off) |
+| `esp32_camera_xiao_core2.ino` | esp32 **2.0.x** (재측정: 2.0.17) | 원본 예제 순서 `[ix + 2] << 16 ... [ix]` (BGR→RGB 스왑 유지) | `1` (on, 원래 값으로 되돌림) |
+
+- **가설:** 2.0.x 드라이버에는 원본 예제의 스왑이 맞고, 3.x 드라이버에서는 스왑을 빼야 색이 맞는다.
+  3.3.12에서 원본 순서로 검출이 실패한 것만 확인했고, 2.0.17에서는 아직 검증하지 않았다.
+- 두 파일은 389행(색상 순서) 한 줄만 다르다.
+- 2.0.17에서 검출이 거의 없으면 먼저 `esp32_camera_xiao.ino`(수정 순서)로 바꿔 확인한 뒤 결과에 기록한다.
+- 측정 시 collector 에 `--board-pkg 2.0.17 --esp-nn on` 을 넣는다. 결과는 analyzer 에서 환경별 표로 분리된다.
+
 카메라 핀 (`esp32_camera_xiao.ino`의 `CAMERA_MODEL_XIAO_ESP32S3` 값, Seeed 공식 핀맵과 일치 확인):
 
 | PWDN | RESET | XCLK | SIOD | SIOC | Y9 | Y8 | Y7 | Y6 | Y5 | Y4 | Y3 | Y2 | VSYNC | HREF | PCLK |
