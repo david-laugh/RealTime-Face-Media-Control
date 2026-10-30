@@ -1,5 +1,7 @@
 """스키마 형식 가짜 디바이스 (기기 없이 gateway/web-ui/benchmark 테스트용).
 
+계약대로 source="mock" 이고 confidence / inference_ms / bbox 는 보내지 않는다.
+
 모드: face | no_face | alternate (정면 --period 초 ↔ 부재 --period 초 반복) | random
 """
 import argparse
@@ -10,25 +12,17 @@ import time
 import common
 
 
-def make_detection(device_id, model_id, seq, uptime_ms, face, rng, inference_ms):
-    conf = round(rng.uniform(0.6, 0.95), 3) if face else 0.0
-    bbox = None
-    if face:
-        w, h = round(rng.uniform(0.2, 0.4), 3), round(rng.uniform(0.25, 0.5), 3)
-        bbox = {"x": round(rng.uniform(0, 1 - w), 3), "y": round(rng.uniform(0, 1 - h), 3), "w": w, "h": h}
+def make_detection(device_id, model_id, seq, uptime_ms, face):
     return {
         "schema_version": common.SCHEMA_VERSION, "device_id": device_id, "seq": seq,
-        "uptime_ms": uptime_ms, "model_id": model_id, "raw_face_detected": face,
-        "confidence": conf, "bbox": bbox, "inference_ms": inference_ms,
-        "state": "FRONT_PRESENT" if face else "NOT_PRESENT",
+        "uptime_ms": uptime_ms, "source": "mock", "model_id": model_id, "raw_face_detected": face,
     }
 
 
-def make_telemetry(device_id, model_id, seq, uptime_ms, inference_ms, fps):
+def make_telemetry(device_id, model_id, seq, uptime_ms, fps):
     return {
         "schema_version": common.SCHEMA_VERSION, "device_id": device_id, "seq": seq,
-        "uptime_ms": uptime_ms, "model_id": model_id, "inference_ms": inference_ms,
-        "fps": round(fps, 2),
+        "uptime_ms": uptime_ms, "model_id": model_id, "fps": round(fps, 2),
     }
 
 
@@ -45,7 +39,7 @@ def face_at(mode, elapsed, period, rng):
 def main():
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument("--device-id", default="mock-xiao-01")
-    p.add_argument("--model-id", default="mock-model", help="실측 결과와 섞이지 않게 별도 ID")
+    p.add_argument("--model-id", default="mock-v1", help="계약상 mock 은 mock-v1")
     p.add_argument("--mode", choices=["face", "no_face", "alternate", "random"], default="alternate")
     p.add_argument("--period", type=float, default=5.0, help="alternate 모드 전환 주기(초)")
     p.add_argument("--fps", type=float, default=5.0)
@@ -71,16 +65,15 @@ def main():
         while not args.duration or time.monotonic() - start < args.duration:
             elapsed = time.monotonic() - start
             uptime_ms = int(elapsed * 1000)
-            inference_ms = int(rng.gauss(150, 10))
             face = face_at(args.mode, elapsed, args.period, rng)
-            msg = make_detection(args.device_id, args.model_id, det_seq, uptime_ms, face, rng, max(inference_ms, 1))
+            msg = make_detection(args.device_id, args.model_id, det_seq, uptime_ms, face)
             assert not common.validate("detection", msg), common.validate("detection", msg)
             if rng.random() >= args.drop:
                 client.publish(det_topic, json.dumps(msg))
             det_seq += 1
             frame += 1
             if frame % args.telemetry_every == 0:
-                tel = make_telemetry(args.device_id, args.model_id, tel_seq, uptime_ms, max(inference_ms, 1), args.fps)
+                tel = make_telemetry(args.device_id, args.model_id, tel_seq, uptime_ms, args.fps)
                 client.publish(tel_topic, json.dumps(tel))
                 tel_seq += 1
             time.sleep(max(0.0, start + frame / args.fps - time.monotonic()))

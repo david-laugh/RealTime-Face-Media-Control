@@ -1,18 +1,21 @@
 import json
+from pathlib import Path
 
 import analyzer
+import common
 from collector import build_record
 
+FIXTURES = Path(__file__).parent / "fixtures"
 
-def det(seq, face, conf, inf=100, up=None, dev="d1"):
-    return {"schema_version": "1.0", "device_id": dev, "seq": seq, "uptime_ms": up if up is not None else seq * 200,
-            "model_id": "m", "raw_face_detected": face, "confidence": conf,
-            "bbox": {"x": 0, "y": 0, "w": 0.1, "h": 0.1} if face else None,
-            "inference_ms": inf, "state": "FRONT_PRESENT" if face else "NOT_PRESENT"}
+
+def mock_det(seq, face, up=None):
+    """mock 계약: confidence / inference_ms / bbox 없음."""
+    return {"schema_version": "1.0", "device_id": "d1", "seq": seq, "uptime_ms": seq * 200 if up is None else up,
+            "source": "mock", "model_id": "mock-v1", "raw_face_detected": face}
 
 
 def records(payloads, kind="detection", label="FACE"):
-    ctx = {"label": label, "distance": "50cm", "env": "NORMAL"}
+    ctx = {"label": label, "position": "CENTER", "distance": "50cm", "env": "NORMAL"}
     out = []
     for i, p in enumerate(payloads):
         r = build_record(f"smart-media/d1/{kind}", json.dumps(p).encode(), ctx)
@@ -25,35 +28,41 @@ def meta(label="FACE", expected=True):
     return {"model_id": "m", "label": label, "distance": "50cm", "env": "NORMAL", "expected_face": expected}
 
 
-def test_rates_thresholds_transitions_seq_loss():
-    # seq 0,1,2,4,5 (3 유실) / 판정 T T F T T / conf .9 .5 0 .7 .35
-    ps = [det(0, True, .9, 100), det(1, True, .5, 200), det(2, False, 0, 300),
-          det(4, True, .7, 400), det(5, True, .35, 500)]
-    [row] = analyzer.aggregate([(meta(), records(ps))])
-    assert row["frames"] == 5 and row["metric"] == "detection_rate"
-    assert row["face_rate"] == 0.8
+def test_fixture_payloads_match_contract():
+    [(_, recs)] = analyzer.load_sessions(FIXTURES / "edge_impulse_session")
+    for r in recs:
+        assert common.validate("detection", r["payload"]) == []
+
+
+def test_edge_impulse_fixture_metrics():
+    # seq 0,1,2,4,5 (3 유실) / conf .9 .5 0 .7 .35 / raw(≥0.6) T F F T F
+    [row] = analyzer.aggregate(analyzer.load_sessions(FIXTURES / "edge_impulse_session"))
+    assert row["frames"] == 5 and row["metric"] == "detection_rate" and row["position"] == "CENTER"
+    assert row["face_rate"] == 0.4
+    # 스윕은 저장된 confidence 기준 (raw 와 무관)
     assert row["rate@0.3"] == 0.8 and row["rate@0.5"] == 0.6 and row["rate@0.8"] == 0.2
     assert row["rate@0.9"] == 0.2
-    assert row["transitions"] == 2
+    assert row["transitions"] == 3
     assert abs(row["seq_loss_rate"] - 1 / 6) < 1e-9
     assert row["inference_ms_mean"] == 300 and row["inference_ms_p50"] == 300
     assert row["inference_ms_p95"] == 480
-    assert row["debounce1_transitions"] == 2 and row["debounce2_transitions"] == 0
+    assert row["debounce1_transitions"] == 3 and row["debounce2_transitions"] == 1  # T→F(연속 2)
+    assert row["debounce3_transitions"] == 0
 
 
-def test_false_positive_and_invalid_excluded():
-    rs = records([det(0, False, 0), det(1, True, .6)], label="NO_FACE")
-    rs += records([{"bad": 1}], label="NO_FACE")
+def test_mock_without_optional_fields():
+    rs = records([mock_det(0, False), mock_det(1, True)], label="NO_FACE") + records([{"bad": 1}], label="NO_FACE")
     [row] = analyzer.aggregate([(meta("NO_FACE", False), rs)])
     assert row["metric"] == "false_positive_rate"
     assert row["face_rate"] == 0.5 and row["invalid_msgs"] == 1 and row["frames"] == 2
+    assert row["rate@0.5"] is None and row["inference_ms_mean"] is None
 
 
 def test_fps_from_telemetry_else_uptime():
     tel = {"schema_version": "1.0", "device_id": "d1", "seq": 0, "uptime_ms": 0, "model_id": "m", "fps": 4.0}
-    [row] = analyzer.aggregate([(meta(), records([det(0, True, .9), det(1, True, .9)]) + records([tel], "telemetry"))])
+    [row] = analyzer.aggregate([(meta(), records([mock_det(0, True), mock_det(1, True)]) + records([tel], "telemetry"))])
     assert row["fps"] == 4.0
-    [row] = analyzer.aggregate([(meta(), records([det(0, True, .9, up=0), det(1, True, .9, up=250)]))])
+    [row] = analyzer.aggregate([(meta(), records([mock_det(0, True, up=0), mock_det(1, True, up=250)]))])
     assert row["fps"] == 4.0
 
 
@@ -63,15 +72,8 @@ def test_seq_reset_and_debounce():
 
 
 def test_collector_strips_non_schema_fields():
-    p = det(0, True, .9) | {"image": "base64..."}
+    p = mock_det(0, True) | {"image": "base64...", "state": "FRONT_PRESENT"}
     [r] = records([p])
-    assert r["valid"] is False and "image" not in r["payload"]
+    assert r["valid"] is False and "image" not in r["payload"] and "state" not in r["payload"]
     r = build_record("smart-media/d1/detection", b"not json", {})
     assert r["payload"] is None and r["valid"] is False
-
-
-def test_threshold_sweep_uses_stored_confidence():
-    # raw=False 이지만 confidence 0.4 (bridge 임계값 0.5 미만) → rate@0.3 에는 포함
-    ps = [det(0, False, .4), det(1, True, .6)]
-    [row] = analyzer.aggregate([(meta(), records(ps))])
-    assert row["face_rate"] == 0.5 and row["rate@0.3"] == 1.0 and row["rate@0.5"] == 0.5

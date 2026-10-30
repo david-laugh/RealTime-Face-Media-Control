@@ -1,0 +1,6 @@
+{
+  "_note": "테스트용 합성 데이터 (실측 아님)",
+  "session_id": "fixture_FACE_CENTER_50cm_NORMAL", "model_id": "ei-541658-fomo01-int8",
+  "label": "FACE", "position": "CENTER", "distance": "50cm", "env": "NORMAL", "expected_face": true,
+  "device_threshold": 0.2, "bridge_threshold": 0.6
+}

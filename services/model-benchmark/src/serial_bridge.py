@@ -7,14 +7,15 @@
 200자 초과 또는 숫자 나열이 긴 줄(debug_nn features 덤프 의심)은 내용 없이 경고 카운트만 남긴다.
 
 변환 규칙:
-- 한 프레임의 박스 중 최고 confidence 박스 사용. 박스가 없으면 confidence=0, bbox=null.
-- raw_face_detected = (최고 confidence >= --threshold). 기기는 출력 임계값 이상 박스를 모두 출력하므로
-  임계값 미만이어도 confidence 는 그대로 보내 analyzer 가 임계값 스윕에 쓴다 (이때 bbox=null).
+- source = "edge_impulse".
+- 한 프레임의 박스 중 최고 confidence 박스 사용. 박스가 없으면 confidence=0, bbox 필드 생략.
+- raw_face_detected = (최고 confidence >= --threshold, 기본 0.6 = 모델 원래 판정 기준).
+  기기는 출력 임계값(0.2) 이상 박스를 모두 출력하므로 임계값 미만이어도 confidence 는 그대로 보내
+  analyzer 가 임계값 스윕에 쓴다 (이때 bbox 생략).
 - DSP → telemetry.preprocess_ms, Classification → inference_ms.
 - bbox 는 --input-width/--input-height 로 나눈 0~1 값. FOMO 는 중심점 검출 모델이라
   width/height 는 얼굴 크기가 아니라 출력 격자 셀 크기(예: 96x96 입력 → 8px)다. 위치(x, y)만 의미 있음.
 - seq / uptime_ms 는 시리얼에 없으므로 bridge 가 생성 (uptime_ms = bridge 시작 후 경과 시간).
-- state 는 디바이스 판정 알고리즘이 없어 raw_face_detected 를 그대로 매핑.
 """
 import argparse
 import json
@@ -117,7 +118,7 @@ class Bridge:
     """Frame → 스키마 메시지 생성 및 publish. publish(topic, dict) 주입 가능."""
 
     def __init__(self, publish, device_id, model_id, input_w, input_h, face_labels=None, start=None,
-                 threshold=0.5):
+                 threshold=0.6):
         self.publish = publish
         self.threshold = threshold
         self.device_id, self.model_id = device_id, model_id
@@ -134,15 +135,15 @@ class Bridge:
         uptime_ms = max(int((frame.t_host - self.start) * 1000), 0)
         det = {
             "schema_version": common.SCHEMA_VERSION, "device_id": self.device_id, "seq": self.det_seq,
-            "uptime_ms": uptime_ms, "model_id": self.model_id,
+            "uptime_ms": uptime_ms, "source": "edge_impulse", "model_id": self.model_id,
             "raw_face_detected": face,
             "confidence": _clamp01(best.conf) if best else 0,
-            "bbox": None if not face else {
-                "x": _clamp01(best.x / self.input_w), "y": _clamp01(best.y / self.input_h),
-                "w": _clamp01(best.w / self.input_w), "h": _clamp01(best.h / self.input_h)},
             "inference_ms": frame.classification_ms,
-            "state": "FRONT_PRESENT" if face else "NOT_PRESENT",
         }
+        if face:
+            det["bbox"] = {
+                "x": _clamp01(best.x / self.input_w), "y": _clamp01(best.y / self.input_h),
+                "w": _clamp01(best.w / self.input_w), "h": _clamp01(best.h / self.input_h)}
         tel = {
             "schema_version": common.SCHEMA_VERSION, "device_id": self.device_id, "seq": self.tel_seq,
             "uptime_ms": uptime_ms, "model_id": self.model_id,
@@ -166,7 +167,7 @@ def main():
     p.add_argument("--input-width", type=int, required=True)
     p.add_argument("--input-height", type=int, required=True)
     p.add_argument("--face-label", action="append", help="얼굴로 볼 라벨 (기본: 모든 라벨)")
-    p.add_argument("--threshold", type=float, default=0.5, help="raw_face_detected 판정 임계값")
+    p.add_argument("--threshold", type=float, default=0.6, help="raw_face_detected 판정 임계값 (모델 원래 기준 0.6)")
     p.add_argument("--mqtt-host", default="localhost")
     p.add_argument("--mqtt-port", type=int, default=common.MQTT_PORT)
     p.add_argument("--stats-every", type=float, default=30, help="통계 출력 주기(초)")

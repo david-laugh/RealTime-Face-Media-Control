@@ -2,6 +2,7 @@
 
 판정 기준은 raw_face_detected. expected_face=true 그룹의 face_rate 는 검출률,
 false 그룹의 face_rate 는 오탐률이다. 스키마 검증 실패 메시지는 지표에서 제외.
+confidence / inference_ms 는 선택 필드(mock 은 미전송)라 있는 메시지만 집계하고, 없으면 "-".
 """
 import argparse
 import csv
@@ -89,8 +90,8 @@ def session_metrics(meta, records):
     for dets in dets_by_dev.values():
         states = [d["raw_face_detected"] for d in dets]
         m["faces"] += states
-        m["confs"] += [d["confidence"] for d in dets]
-        m["inference_ms"] += [d["inference_ms"] for d in dets]
+        m["confs"] += [d["confidence"] for d in dets if "confidence" in d]
+        m["inference_ms"] += [d["inference_ms"] for d in dets if "inference_ms" in d]
         m["transitions"] += transitions(states)
         for n in DEBOUNCE_FRAMES:
             m["debounce"][n] += transitions(debounce(states, n))
@@ -128,7 +129,7 @@ def aggregate(sessions):
             "face_rate": sum(faces) / n if n else None,
         }
         for t in THRESHOLDS:
-            row[f"rate@{t}"] = sum(c >= t for c in confs) / n if n else None
+            row[f"rate@{t}"] = sum(c >= t for c in confs) / len(confs) if confs else None
         row.update({
             "inference_ms_mean": mean(inf), "inference_ms_p50": percentile(inf, 0.5),
             "inference_ms_p95": percentile(inf, 0.95), "fps": mean(fps),

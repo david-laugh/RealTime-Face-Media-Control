@@ -38,7 +38,7 @@ def test_face_frame_normalized_and_valid():
     assert det["raw_face_detected"] is True
     assert det["confidence"] == 0.8125
     assert det["bbox"] == {"x": 0.5, "y": 0.3333, "w": 0.1667, "h": 0.0833}
-    assert det["inference_ms"] == 152 and det["state"] == "FRONT_PRESENT"
+    assert det["inference_ms"] == 152 and det["source"] == "edge_impulse" and "state" not in det
     for t, m in pubs:
         assert common.validate(common.kind_of(t), m) == []
 
@@ -48,7 +48,7 @@ def test_no_detection_frame():
     dets = detections(pubs)
     assert len(dets) == 2 and [d["seq"] for d in dets] == [0, 1]
     assert dets[0]["raw_face_detected"] is False
-    assert dets[0]["confidence"] == 0 and dets[0]["bbox"] is None
+    assert dets[0]["confidence"] == 0 and "bbox" not in dets[0]
     tels = [m for t, m in pubs if t.endswith("/telemetry")]
     assert "fps" not in tels[0] and tels[1]["fps"] == 5.0
     assert tels[0]["preprocess_ms"] == 3
@@ -97,7 +97,7 @@ REAL_FACE = ["Predictions (DSP: 4 ms., Classification: 2275 ms., Anomaly: 0 ms.)
 def test_real_sample():
     parser, pubs, logs = run(REAL_NO_FACE + REAL_FACE)
     no, yes = detections(pubs)
-    assert (no["raw_face_detected"], no["confidence"], no["bbox"]) == (False, 0, None)
+    assert (no["raw_face_detected"], no["confidence"], "bbox" in no) == (False, 0, False)
     assert yes["raw_face_detected"] is True and yes["confidence"] == 0.8047
     assert yes["bbox"] == {"x": 0.4167, "y": 0.4167, "w": 0.0833, "h": 0.0833}
     assert yes["inference_ms"] == 2275
@@ -111,6 +111,12 @@ def test_below_threshold_keeps_confidence_for_sweep():
                       "  face (0.312500) [ x: 8, y: 8, width: 8, height: 8 ]\n",
                       "  face (0.250000) [ x: 16, y: 8, width: 8, height: 8 ]\n"])
     det = detections(pubs)[0]
-    assert det["raw_face_detected"] is False and det["state"] == "NOT_PRESENT"
-    assert det["confidence"] == 0.3125 and det["bbox"] is None
+    assert det["raw_face_detected"] is False
+    assert det["confidence"] == 0.3125 and "bbox" not in det
     assert common.validate("detection", det) == []
+
+
+def test_default_threshold_is_model_original_06():
+    _, pubs, _ = run([REAL_FACE[0], REAL_FACE[1], "  face (0.550000) [ x: 8, y: 8, width: 8, height: 8 ]\n"])
+    det = detections(pubs)[0]
+    assert det["raw_face_detected"] is False and det["confidence"] == 0.55
