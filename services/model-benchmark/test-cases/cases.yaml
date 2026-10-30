@@ -22,7 +22,11 @@ cases:
   - {id: face-80-offleft-normal,  label: FACE, position: OFFSET_LEFT,  distance: 80cm, env: NORMAL, expected_face: true}
   - {id: face-80-offright-normal, label: FACE, position: OFFSET_RIGHT, distance: 80cm, env: NORMAL, expected_face: true}
 
-  # --- 추후: 측면/후면 (LEFT_45/RIGHT_45 기대값은 팀 합의 후 확정) ---
+  # --- 측면 45도: 기대값 NOT_PRESENT (expected_face: false) 는 팀 합의 전 잠정 ---
+  - {id: left45-50-normal,  label: LEFT_45,  distance: 50cm, env: NORMAL, expected_face: false, enabled: true}  # 잠정
+  - {id: right45-50-normal, label: RIGHT_45, distance: 50cm, env: NORMAL, expected_face: false, enabled: true}  # 잠정
+
+  # --- 추후: 측면 90도/후면 (미측정) ---
   - {id: left90-80-normal,  label: LEFT_90,  distance: 80cm, env: NORMAL, expected_face: false}
   - {id: right90-80-normal, label: RIGHT_90, distance: 80cm, env: NORMAL, expected_face: false}
   - {id: back-80-normal,    label: BACK,     distance: 80cm, env: NORMAL, expected_face: false}
