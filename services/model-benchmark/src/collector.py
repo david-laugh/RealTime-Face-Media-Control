@@ -67,6 +67,10 @@ def main():
     # meta.json
     p.add_argument("--operator", default="", help="측정자 이니셜/별칭 (실명 금지)")
     p.add_argument("--deploy", default="int8", help="배포 옵션, 예: int8, int8+EON")
+    p.add_argument("--esp-nn", default="off", choices=["on", "off"])
+    p.add_argument("--color", default="grayscale", choices=["grayscale", "rgb"])
+    p.add_argument("--device-threshold", type=float, default=0.2, help="스케치의 검출 출력 임계값")
+    p.add_argument("--bridge-threshold", type=float, default=0.5, help="serial_bridge --threshold 값")
     p.add_argument("--download-date", default="", help="Edge Impulse 라이브러리 다운로드 날짜 YYYY-MM-DD")
     p.add_argument("--lighting", default="", help="조명 설명")
     p.add_argument("--camera-height", default="", help="카메라 높이, 예: 110cm")
@@ -85,7 +89,9 @@ def main():
         "case_id": case["case_id"], "label": case["label"], "distance": case["distance"],
         "env": case["env"], "expected_face": case["expected_face"], "duration_s": case["duration_s"],
         "operator": args.operator, "started_at": now.isoformat(timespec="seconds"),
-        "deploy": args.deploy, "download_date": args.download_date, "lighting": args.lighting,
+        "deploy": args.deploy, "esp_nn": args.esp_nn, "color": args.color,
+        "device_threshold": args.device_threshold, "bridge_threshold": args.bridge_threshold,
+        "download_date": args.download_date, "lighting": args.lighting,
         "camera_height": args.camera_height, "camera_position": args.camera_position,
         "notes": args.notes,
     }

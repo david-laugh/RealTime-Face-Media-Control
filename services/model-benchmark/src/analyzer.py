@@ -14,7 +14,7 @@ import common
 THRESHOLDS = [round(0.3 + 0.1 * i, 1) for i in range(7)]  # 0.3 ~ 0.9
 DEBOUNCE_FRAMES = [1, 2, 3, 4, 5]
 META_COLUMNS = ["session_id", "label", "distance", "env", "operator", "started_at", "deploy",
-                "download_date", "lighting", "camera_height", "camera_position", "notes"]
+                "esp_nn", "color", "device_threshold", "bridge_threshold", "download_date", "lighting", "camera_height", "camera_position", "notes"]
 
 
 def percentile(values, q):
@@ -127,7 +127,7 @@ def aggregate(sessions):
             "face_rate": sum(faces) / n if n else None,
         }
         for t in THRESHOLDS:
-            row[f"rate@{t}"] = sum(f and c >= t for f, c in zip(faces, confs)) / n if n else None
+            row[f"rate@{t}"] = sum(c >= t for c in confs) / n if n else None
         row.update({
             "inference_ms_mean": mean(inf), "inference_ms_p50": percentile(inf, 0.5),
             "inference_ms_p95": percentile(inf, 0.95), "fps": mean(fps),
@@ -170,7 +170,8 @@ def write_reports(rows, metas, out_dir: Path):
         "## 측정 조건", "", md_table(META_COLUMNS, metas), "",
         "## 검출률 / 오탐률", "",
         md_table(["model_id", *key, "metric", "sessions", "frames", "invalid_msgs", "face_rate"], rows), "",
-        "## confidence 임계값별 비율 (raw_face_detected 이고 confidence ≥ t)", "",
+        "## confidence 임계값별 비율 (저장된 confidence ≥ t, raw_face_detected 와 무관)", "",
+        "기기는 0.2 이상 박스를 출력하므로 bridge 임계값보다 낮은 t 도 계산 가능.", "",
         md_table([*key, *(f"rate@{t}" for t in THRESHOLDS)], rows), "",
         "## 성능 / 안정성", "",
         md_table([*key, "inference_ms_mean", "inference_ms_p50", "inference_ms_p95", "fps",

@@ -68,3 +68,10 @@ def test_collector_strips_non_schema_fields():
     assert r["valid"] is False and "image" not in r["payload"]
     r = build_record("smart-media/d1/detection", b"not json", {})
     assert r["payload"] is None and r["valid"] is False
+
+
+def test_threshold_sweep_uses_stored_confidence():
+    # raw=False 이지만 confidence 0.4 (bridge 임계값 0.5 미만) → rate@0.3 에는 포함
+    ps = [det(0, False, .4), det(1, True, .6)]
+    [row] = analyzer.aggregate([(meta(), records(ps))])
+    assert row["face_rate"] == 0.5 and row["rate@0.3"] == 1.0 and row["rate@0.5"] == 0.5
